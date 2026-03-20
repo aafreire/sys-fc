@@ -3,8 +3,12 @@ set -e
 
 # ============================================================
 # Script de Deploy - sys-fc (Elixir/Phoenix)
+# Repositório: https://github.com/aafreire/sys-fc.git
 # Uso: bash deploy.sh
 # ============================================================
+
+REPO_URL="https://github.com/aafreire/sys-fc.git"
+APP_DIR="$HOME/sys-fc"
 
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -42,7 +46,7 @@ install_docker() {
     sudo systemctl start docker
     sudo systemctl enable docker
     sudo usermod -aG docker "$USER"
-    info "Docker instalado. Se der erro de permissão, saia e reconecte (exit + ssh)."
+    warn "Docker instalado. Se der erro de permissão, rode: exit, reconecte via SSH e rode o script novamente."
   fi
 }
 
@@ -78,19 +82,12 @@ install_git() {
 # 2. Clonar ou atualizar repositório
 # ============================================================
 setup_repo() {
-  APP_DIR="$HOME/sys-fc"
-
   if [ -d "$APP_DIR/.git" ]; then
     info "Repositório já existe em $APP_DIR. Atualizando..."
     cd "$APP_DIR"
-    git pull
+    git pull origin main
   else
-    echo ""
-    read -rp "URL do repositório Git (ex: https://github.com/user/sys-fc.git): " REPO_URL
-    if [ -z "$REPO_URL" ]; then
-      error "URL do repositório é obrigatória."
-    fi
-    info "Clonando repositório..."
+    info "Clonando repositório: $REPO_URL"
     git clone "$REPO_URL" "$APP_DIR"
     cd "$APP_DIR"
   fi
@@ -102,7 +99,7 @@ setup_repo() {
 # 3. Gerar secrets e criar .env.prod
 # ============================================================
 setup_env() {
-  cd "$HOME/sys-fc"
+  cd "$APP_DIR"
 
   if [ -f .env.prod ]; then
     warn "Arquivo .env.prod já existe."
@@ -113,26 +110,30 @@ setup_env() {
     fi
   fi
 
-  info "Gerando secrets..."
+  info "Gerando secrets automaticamente..."
   SECRET_KEY_BASE=$(openssl rand -base64 64 | tr -d '\n+/=' | head -c 64)
   JWT_SECRET=$(openssl rand -base64 48 | tr -d '\n+/=' | head -c 48)
   DB_PASSWORD=$(openssl rand -base64 32 | tr -d '\n+/=' | head -c 32)
 
   echo ""
-  info "Configure as variáveis de ambiente:"
+  info "=== Configuração do ambiente ==="
   echo ""
 
-  # IP/Domínio
-  DEFAULT_IP=$(curl -s --max-time 5 http://checkip.amazonaws.com 2>/dev/null || echo "")
+  # IP/Domínio - detecta automaticamente o IP público da EC2
+  DEFAULT_IP=$(curl -s --max-time 5 http://checkip.amazonaws.com 2>/dev/null | tr -d '\n' || echo "")
   if [ -n "$DEFAULT_IP" ]; then
     read -rp "IP ou domínio público da EC2 [$DEFAULT_IP]: " PHX_HOST
     PHX_HOST=${PHX_HOST:-$DEFAULT_IP}
   else
     read -rp "IP ou domínio público da EC2: " PHX_HOST
+    [ -z "$PHX_HOST" ] && error "IP/domínio é obrigatório."
   fi
 
   # CORS
-  read -rp "URL do frontend para CORS (ex: http://meusite.com): " CORS_ORIGINS
+  echo ""
+  info "URL do frontend que vai chamar a API."
+  info "Exemplos: http://meusite.com, http://192.168.1.10:8080"
+  read -rp "URL do frontend para CORS: " CORS_ORIGINS
   CORS_ORIGINS=${CORS_ORIGINS:-"http://localhost:3000"}
 
   # Porta
@@ -141,11 +142,11 @@ setup_env() {
 
   # Admin
   echo ""
-  info "Dados do usuário admin:"
+  info "=== Dados do usuário admin ==="
   read -rp "Email do admin [admin@sysfc.com]: " ADMIN_EMAIL
   ADMIN_EMAIL=${ADMIN_EMAIL:-"admin@sysfc.com"}
 
-  read -rsp "Senha do admin [Admin@2026!]: " ADMIN_PASSWORD
+  read -rsp "Senha do admin (mín 8 chars) [Admin@2026!]: " ADMIN_PASSWORD
   echo ""
   ADMIN_PASSWORD=${ADMIN_PASSWORD:-"Admin@2026!"}
 
@@ -153,12 +154,12 @@ setup_env() {
   ADMIN_NAME=${ADMIN_NAME:-"Administrador"}
 
   cat > .env.prod << EOF
-# Database
+# === Database ===
 POSTGRES_USER=sys_fc
 POSTGRES_PASSWORD=$DB_PASSWORD
 POSTGRES_DB=sys_fc_prod
 
-# Phoenix
+# === Phoenix / Elixir ===
 SECRET_KEY_BASE=$SECRET_KEY_BASE
 JWT_SECRET=$JWT_SECRET
 JWT_EXPIRY_SECONDS=604800
@@ -166,39 +167,36 @@ PHX_HOST=$PHX_HOST
 PORT=$PORT
 POOL_SIZE=10
 
-# CORS
+# === CORS (separar múltiplas URLs com vírgula) ===
 CORS_ORIGINS=$CORS_ORIGINS
 
-# Admin
+# === Admin (usado apenas no seed inicial) ===
 ADMIN_EMAIL=$ADMIN_EMAIL
 ADMIN_PASSWORD=$ADMIN_PASSWORD
 ADMIN_NAME=$ADMIN_NAME
 EOF
 
   chmod 600 .env.prod
-  info "Arquivo .env.prod criado com permissões restritas."
+  info "Arquivo .env.prod criado com permissões restritas (chmod 600)."
 }
 
 # ============================================================
 # 4. Build e start dos containers
 # ============================================================
 start_containers() {
-  cd "$HOME/sys-fc"
+  cd "$APP_DIR"
 
-  info "Fazendo build da imagem (pode demorar alguns minutos na primeira vez)..."
+  info "Fazendo build da imagem Docker (primeira vez demora ~5min)..."
   docker compose -f docker-compose.prod.yml --env-file .env.prod build
 
-  info "Subindo containers..."
+  info "Subindo containers (PostgreSQL + Backend)..."
   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
   info "Aguardando banco de dados ficar pronto..."
-  sleep 5
-
-  # Aguardar o banco ficar healthy
   RETRIES=0
   MAX_RETRIES=30
   while [ $RETRIES -lt $MAX_RETRIES ]; do
-    if docker compose -f docker-compose.prod.yml ps db | grep -q "healthy"; then
+    if docker compose -f docker-compose.prod.yml ps db 2>/dev/null | grep -q "healthy"; then
       info "Banco de dados pronto!"
       break
     fi
@@ -207,27 +205,26 @@ start_containers() {
   done
 
   if [ $RETRIES -eq $MAX_RETRIES ]; then
-    error "Banco de dados não ficou pronto a tempo. Verifique com: docker compose -f docker-compose.prod.yml logs db"
+    error "Banco de dados não ficou pronto a tempo. Verifique: docker compose -f docker-compose.prod.yml logs db"
   fi
 
-  # Aguardar o backend subir
   info "Aguardando backend iniciar..."
-  sleep 5
+  sleep 8
 }
 
 # ============================================================
 # 5. Migrations e seed do admin
 # ============================================================
 run_migrations() {
-  cd "$HOME/sys-fc"
+  cd "$APP_DIR"
 
-  info "Rodando migrations..."
+  info "Rodando migrations do banco de dados..."
   docker compose -f docker-compose.prod.yml exec -T backend bin/sys_fc eval "SysFc.Release.migrate()"
   info "Migrations concluídas!"
 }
 
 seed_admin() {
-  cd "$HOME/sys-fc"
+  cd "$APP_DIR"
 
   info "Criando usuário admin..."
   docker compose -f docker-compose.prod.yml exec -T backend bin/sys_fc eval "SysFc.Release.seed_admin()"
@@ -238,7 +235,7 @@ seed_admin() {
 # 6. Verificar se está tudo OK
 # ============================================================
 verify() {
-  cd "$HOME/sys-fc"
+  cd "$APP_DIR"
 
   source .env.prod
   local PORT_VAL=${PORT:-4000}
@@ -252,24 +249,28 @@ verify() {
   if [ "$HTTP_CODE" != "000" ]; then
     info "API respondendo! (HTTP $HTTP_CODE)"
   else
-    warn "API ainda não respondeu. Pode estar inicializando. Verifique os logs:"
-    echo "  docker compose -f docker-compose.prod.yml logs -f backend"
+    warn "API ainda não respondeu. Pode estar inicializando."
+    echo "  Verifique os logs: docker compose -f docker-compose.prod.yml logs -f backend"
     return
   fi
 
   echo ""
-  echo "=========================================="
-  echo -e "${GREEN} DEPLOY CONCLUÍDO COM SUCESSO!${NC}"
-  echo "=========================================="
+  echo "============================================="
+  echo -e "${GREEN}  DEPLOY CONCLUIDO COM SUCESSO!${NC}"
+  echo "============================================="
   echo ""
-  echo "  API:   http://${PHX_HOST}:${PORT_VAL}/api"
-  echo "  Admin: ${ADMIN_EMAIL}"
+  echo "  API:       http://${PHX_HOST}:${PORT_VAL}/api"
+  echo "  Admin:     ${ADMIN_EMAIL}"
+  echo "  Repo:      https://github.com/aafreire/sys-fc"
   echo ""
-  echo "  Comandos úteis:"
-  echo "    Logs:        docker compose -f docker-compose.prod.yml logs -f"
-  echo "    Reiniciar:   docker compose -f docker-compose.prod.yml restart"
-  echo "    Parar:       docker compose -f docker-compose.prod.yml down"
-  echo "    Re-deploy:   bash deploy.sh"
+  echo "  ---- Comandos úteis ----"
+  echo ""
+  echo "  Ver logs:          docker compose -f docker-compose.prod.yml logs -f"
+  echo "  Logs do backend:   docker compose -f docker-compose.prod.yml logs -f backend"
+  echo "  Reiniciar:         docker compose -f docker-compose.prod.yml restart"
+  echo "  Parar tudo:        docker compose -f docker-compose.prod.yml down"
+  echo "  Re-deploy:         cd ~/sys-fc && git pull origin main && docker compose -f docker-compose.prod.yml up -d --build backend"
+  echo "  Rodar migrations:  docker compose -f docker-compose.prod.yml exec -T backend bin/sys_fc eval \"SysFc.Release.migrate()\""
   echo ""
 }
 
@@ -277,9 +278,10 @@ verify() {
 # MAIN
 # ============================================================
 echo ""
-echo "=========================================="
+echo "============================================="
 echo "  Deploy sys-fc - Elixir/Phoenix + Docker"
-echo "=========================================="
+echo "  Repo: https://github.com/aafreire/sys-fc"
+echo "============================================="
 echo ""
 
 install_docker
