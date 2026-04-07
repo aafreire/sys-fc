@@ -63,8 +63,6 @@ defmodule SysFc.Finance do
     month = today.month
     year = today.year
 
-    alias SysFc.Students.StudentGuardian
-
     Fee
     |> where([f], f.reference_month == ^month and f.reference_year == ^year)
     |> where([f], f.status in [:pending, :overdue])

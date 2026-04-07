@@ -47,7 +47,7 @@ defmodule SysFcWeb.Endpoint do
     json_decoder: Phoenix.json_library()
 
   plug Corsica,
-    origins: &SysFcWeb.Endpoint.cors_allowed?/1,
+    origins: {SysFcWeb.Endpoint, :cors_allowed?},
     allow_headers: ["content-type", "authorization"],
     allow_methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     max_age: 600
