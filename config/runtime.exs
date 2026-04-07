@@ -61,9 +61,12 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
+  default_origins = ["http://localhost:5173", "http://localhost:8080", "http://localhost:3000"]
+
   cors_origins =
     case System.get_env("CORS_ORIGINS") do
-      nil -> ["http://localhost:5173", "http://localhost:8080", "http://localhost:3000"]
+      nil -> default_origins
+      "" -> default_origins
       origins -> String.split(origins, ",", trim: true) |> Enum.map(&String.trim/1)
     end
 
