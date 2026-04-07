@@ -229,6 +229,10 @@ seed_admin() {
   info "Criando usuário admin..."
   docker compose -f docker-compose.prod.yml exec -T backend bin/sys_fc eval "SysFc.Release.seed_admin()"
   info "Usuário admin criado!"
+
+  info "Criando planos e locais de treino..."
+  docker compose -f docker-compose.prod.yml exec -T backend bin/sys_fc eval "SysFc.Release.seed_training_plans()"
+  info "Planos de treino criados!"
 }
 
 # ============================================================
