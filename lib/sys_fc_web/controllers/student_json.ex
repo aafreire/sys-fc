@@ -25,6 +25,7 @@ defmodule SysFcWeb.StudentJSON do
       address_number: student.address_number,
       neighborhood: student.neighborhood,
       city: student.city,
+      complement: student.complement,
       cep: format_cep(student.cep),
       training_days: student.training_days,
       training_plan: student.training_plan,

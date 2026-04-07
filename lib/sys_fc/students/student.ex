@@ -20,6 +20,7 @@ defmodule SysFc.Students.Student do
     field :address_number, :string
     field :neighborhood, :string
     field :city, :string
+    field :complement, :string
     field :cep, :string
     field :training_days, {:array, :string}, default: []
     field :training_plan, :string
@@ -46,7 +47,7 @@ defmodule SysFc.Students.Student do
     |> cast(attrs, [
       :enrollment_number, :name, :birth_date, :category, :photo_url,
       :rg, :school_name, :address, :address_number, :neighborhood,
-      :city, :cep, :training_days, :training_plan, :training_location,
+      :city, :complement, :cep, :training_days, :training_plan, :training_location,
       :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
       :is_active, :is_frozen, :status
     ])
