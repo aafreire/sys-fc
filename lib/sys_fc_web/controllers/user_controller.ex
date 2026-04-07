@@ -4,9 +4,14 @@ defmodule SysFcWeb.UserController do
   alias SysFc.Accounts
 
   # GET /api/admin/users
-  def index(conn, _params) do
-    admins = Accounts.list_admins()
-    render(conn, :index, users: admins)
+  def index(conn, params) do
+    opts = [
+      page: String.to_integer(params["page"] || "1"),
+      per_page: String.to_integer(params["per_page"] || "20")
+    ]
+
+    %{data: admins, meta: meta} = Accounts.list_admins(opts)
+    render(conn, :index, users: admins, meta: meta)
   end
 
   # POST /api/admin/users
