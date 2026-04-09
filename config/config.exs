@@ -34,6 +34,19 @@ config :phoenix, :json_library, Jason
 config :sys_fc, :jwt_secret, "CHANGE_ME_IN_PRODUCTION"
 config :sys_fc, :jwt_expiry_seconds, 60 * 60 * 24 * 7  # 7 dias
 
+# S3 defaults
+config :sys_fc, :s3_bucket, "nebula-imagens"
+
+config :ex_aws,
+  region: "us-east-1",
+  json_codec: Jason
+
+# Mailer (dev uses local adapter)
+config :sys_fc, SysFc.Mailer,
+  adapter: Swoosh.Adapters.Local
+
+config :sys_fc, :mail_from, {"A.D de São Caetano Campo Limpo", "noreply@nebulagames.com.br"}
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

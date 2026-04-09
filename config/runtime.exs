@@ -86,6 +86,31 @@ if config_env() == :prod do
     ],
     secret_key_base: secret_key_base
 
+  # ── AWS S3 ────────────────────────────────────────────────────────────────────
+  config :ex_aws,
+    access_key_id: System.get_env("AWS_ACCESS_KEY_ID", ""),
+    secret_access_key: System.get_env("AWS_SECRET_ACCESS_KEY", ""),
+    region: System.get_env("AWS_REGION", "us-east-1")
+
+  config :sys_fc, :s3_bucket, System.get_env("S3_BUCKET", "nebula-imagens")
+
+  # ── AWS SES (via SMTP) ──────────────────────────────────────────────────────
+  ses_region = System.get_env("AWS_SES_REGION", "us-east-1")
+
+  config :sys_fc, SysFc.Mailer,
+    adapter: Swoosh.Adapters.SMTP,
+    relay: System.get_env("SES_SMTP_SERVER", "email-smtp.#{ses_region}.amazonaws.com"),
+    port: String.to_integer(System.get_env("SES_SMTP_PORT", "587")),
+    username: System.get_env("AWS_SES_ACCESS_KEY", ""),
+    password: System.get_env("AWS_SES_SECRET_KEY", ""),
+    tls: :if_available,
+    ssl: false,
+    auth: :always
+
+  config :sys_fc, :mail_from,
+    {System.get_env("MAIL_FROM_NAME", "A.D de São Caetano Campo Limpo"),
+     System.get_env("MAIL_FROM_EMAIL", "noreply@nebulagames.com.br")}
+
   # ## SSL Support
   #
   # To get SSL working, you will need to add the `https` key

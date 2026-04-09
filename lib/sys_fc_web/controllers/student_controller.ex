@@ -204,6 +204,67 @@ defmodule SysFcWeb.StudentController do
     end
   end
 
+  # POST /api/admin/students/:id/photo
+  def upload_photo(conn, %{"id" => id, "photo" => %Plug.Upload{} = upload}) do
+    case Students.get_student(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      student ->
+        binary = File.read!(upload.path)
+        content_type = upload.content_type || "image/jpeg"
+
+        case SysFc.Storage.upload_student_photo(student.id, binary, content_type) do
+          {:ok, url} ->
+            {:ok, updated} = Students.update_student(student, %{"photo_url" => url})
+            render(conn, :show, student: updated)
+
+          {:error, reason} ->
+            conn |> put_status(:unprocessable_entity)
+            |> json(%{error: "upload_failed", details: inspect(reason)})
+        end
+    end
+  end
+
+  def upload_photo(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "photo_required"})
+  end
+
+  # POST /api/guardian/students/:id/photo
+  def guardian_upload_photo(conn, %{"id" => id, "photo" => %Plug.Upload{} = upload}) do
+    user = conn.assigns.current_user
+    guardian = SysFc.Accounts.get_guardian_by_user_id(user.id)
+
+    case Students.get_student(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      student ->
+        linked = Enum.any?(student.student_guardians, &(&1.guardian_id == guardian.id))
+
+        if not linked do
+          conn |> put_status(:forbidden) |> json(%{error: "not_your_student"})
+        else
+          binary = File.read!(upload.path)
+          content_type = upload.content_type || "image/jpeg"
+
+          case SysFc.Storage.upload_student_photo(student.id, binary, content_type) do
+            {:ok, url} ->
+              {:ok, updated} = Students.update_student(student, %{"photo_url" => url})
+              render(conn, :show, student: updated)
+
+            {:error, reason} ->
+              conn |> put_status(:unprocessable_entity)
+              |> json(%{error: "upload_failed", details: inspect(reason)})
+          end
+        end
+    end
+  end
+
+  def guardian_upload_photo(conn, _params) do
+    conn |> put_status(:bad_request) |> json(%{error: "photo_required"})
+  end
+
   # POST /api/guardian/students
   def guardian_create(conn, params) do
     user = conn.assigns.current_user

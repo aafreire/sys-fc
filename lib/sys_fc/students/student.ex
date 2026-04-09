@@ -51,6 +51,32 @@ defmodule SysFc.Students.Student do
       :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
       :is_active, :is_frozen, :status
     ])
+    |> validate_required([:enrollment_number, :name, :birth_date, :category, :monthly_fee, :rg])
+    |> validate_inclusion(:category, @categories)
+    |> validate_inclusion(:status, @statuses)
+    |> validate_number(:monthly_fee, greater_than_or_equal_to: 0)
+    |> validate_number(:billing_day,
+        greater_than_or_equal_to: 1,
+        less_than_or_equal_to: 28,
+        message: "deve ser entre 1 e 28"
+      )
+    |> sanitize_cep()
+    |> validate_cep_format()
+    |> validate_rg_format()
+    |> unique_constraint(:enrollment_number)
+    |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
+  end
+
+  @doc "Changeset para atualização — RG não obrigatório (permite atualizar alunos legados)."
+  def update_changeset(student, attrs) do
+    student
+    |> cast(attrs, [
+      :enrollment_number, :name, :birth_date, :category, :photo_url,
+      :rg, :school_name, :address, :address_number, :neighborhood,
+      :city, :complement, :cep, :training_days, :training_plan, :training_location,
+      :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
+      :is_active, :is_frozen, :status
+    ])
     |> validate_required([:enrollment_number, :name, :birth_date, :category, :monthly_fee])
     |> validate_inclusion(:category, @categories)
     |> validate_inclusion(:status, @statuses)
@@ -64,6 +90,7 @@ defmodule SysFc.Students.Student do
     |> validate_cep_format()
     |> validate_rg_format()
     |> unique_constraint(:enrollment_number)
+    |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
   end
 
   # Normaliza CEP: aceita "00000-000" ou "00000000" → armazena sem hífen

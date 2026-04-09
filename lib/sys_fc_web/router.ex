@@ -65,6 +65,7 @@ defmodule SysFcWeb.Router do
     put    "/students/:id/reject",         StudentController, :reject
     put    "/students/:id/freeze",         StudentController, :freeze
     put    "/students/:id/unfreeze",       StudentController, :unfreeze
+    post   "/students/:id/photo",          StudentController, :upload_photo
 
     # Responsáveis
     get  "/guardians",  GuardianController, :index
@@ -173,6 +174,7 @@ defmodule SysFcWeb.Router do
     get  "/students",                 GuardianController, :my_students
     post "/students",                 StudentController, :guardian_create
     put  "/students/:id/toggle-freeze", StudentController, :guardian_freeze
+    post "/students/:id/photo",          StudentController, :guardian_upload_photo
     get  "/fees",             FeeController, :guardian_index
     post "/fees/pay",         FeeController, :guardian_pay
     get  "/fees/:id",         FeeController, :guardian_show

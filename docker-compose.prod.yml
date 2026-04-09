@@ -34,6 +34,18 @@ services:
       PHX_SERVER: "true"
       POOL_SIZE: ${POOL_SIZE:-10}
       CORS_ORIGINS: ${CORS_ORIGINS}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET: ${S3_BUCKET:-nebula-imagens}
+      AWS_SES_REGION: ${AWS_SES_REGION:-us-east-1}
+      AWS_SES_ACCESS_KEY: ${AWS_SES_ACCESS_KEY}
+      AWS_SES_SECRET_KEY: ${AWS_SES_SECRET_KEY}
+      MAIL_FROM_EMAIL: ${MAIL_FROM_EMAIL:-noreply@nebulagames.com.br}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-A.D de São Caetano Campo Limpo}
+      ADMIN2_EMAIL: ${ADMIN2_EMAIL}
+      ADMIN2_PASSWORD: ${ADMIN2_PASSWORD}
+      ADMIN2_NAME: ${ADMIN2_NAME}
     ports:
       - "${PORT:-4000}:4000"
 

@@ -104,7 +104,7 @@ defmodule SysFc.Students do
 
   def update_student(%Student{} = student, attrs) do
     student
-    |> Student.changeset(attrs)
+    |> Student.update_changeset(attrs)
     |> Repo.update()
     |> case do
       {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}
