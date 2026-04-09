@@ -59,7 +59,7 @@ defmodule SysFc.Accounts do
         {:error, :inactive}
 
       is_nil(guardian.user.password_hash) ->
-        {:error, :invalid_credentials}
+        {:error, :no_password}
 
       not User.valid_password?(guardian.user, password) ->
         {:error, :invalid_credentials}

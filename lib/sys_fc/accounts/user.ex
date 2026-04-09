@@ -49,9 +49,13 @@ defmodule SysFc.Accounts.User do
 
   @doc "Changeset para completar conta de responsável (adicionar e-mail e senha)"
   def complete_account_changeset(user, attrs) do
+    # If the user already has an email, only update password
+    fields = if is_nil(user.email), do: [:email, :password], else: [:password]
+    required = fields
+
     user
     |> cast(attrs, [:email, :password])
-    |> validate_required([:email, :password])
+    |> validate_required(required)
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_length(:email, max: 160)
     |> validate_length(:password, min: 8, max: 72)

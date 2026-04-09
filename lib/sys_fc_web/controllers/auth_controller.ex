@@ -35,6 +35,12 @@ defmodule SysFcWeb.AuthController do
     |> json(%{error: "invalid_credentials"})
   end
 
+  defp handle_login_result(conn, {:error, :no_password}) do
+    conn
+    |> put_status(:unauthorized)
+    |> json(%{error: "no_password"})
+  end
+
   defp handle_login_result(conn, {:error, :inactive}) do
     conn
     |> put_status(:forbidden)
@@ -93,7 +99,9 @@ defmodule SysFcWeb.AuthController do
         conn |> put_status(:ok) |> json(%{exists: false})
 
       guardian ->
-        has_account = not is_nil(guardian.user.email)
+        has_email = not is_nil(guardian.user.email)
+        has_password = not is_nil(guardian.user.password_hash)
+        has_account = has_email and has_password
 
         base = %{
           exists: true,
@@ -105,9 +113,9 @@ defmodule SysFcWeb.AuthController do
         base =
           if not has_account do
             missing = []
-            missing = if is_nil(guardian.user.email), do: ["email" | missing], else: missing
+            missing = if not has_email, do: ["email" | missing], else: missing
             missing = if is_nil(guardian.cpf) or guardian.cpf == "", do: ["cpf" | missing], else: missing
-            missing = ["password" | missing]
+            missing = if not has_password, do: ["password" | missing], else: missing
             Map.put(base, :missing_fields, missing)
           else
             base
@@ -125,13 +133,17 @@ defmodule SysFcWeb.AuthController do
 
   # POST /api/auth/complete-registration
   # Responsável que foi pré-cadastrado pelo admin completa sua conta (e-mail + senha + cpf opcional)
-  def complete_registration(conn, %{"phone" => phone, "email" => email, "password" => password} = params) do
+  def complete_registration(conn, %{"phone" => phone, "password" => password} = params) do
+    email = params["email"]
     case Accounts.find_guardian_by_phone(phone) do
       nil ->
         conn |> put_status(:not_found) |> json(%{error: "phone_not_found"})
 
       guardian ->
-        if not is_nil(guardian.user.email) do
+        has_email = not is_nil(guardian.user.email)
+        has_password = not is_nil(guardian.user.password_hash)
+
+        if has_email and has_password do
           conn |> put_status(:unprocessable_entity) |> json(%{error: "account_already_complete"})
         else
           # Update CPF if provided and not already set
@@ -140,7 +152,10 @@ defmodule SysFcWeb.AuthController do
             Accounts.update_guardian_cpf(guardian, cpf)
           end
 
-          case Accounts.complete_guardian_account(guardian, email, password) do
+          # Use existing email if already set, otherwise use the provided one
+          final_email = if has_email, do: guardian.user.email, else: email
+
+          case Accounts.complete_guardian_account(guardian, final_email, password) do
             {:ok, %{user: user, guardian: g}} ->
               {:ok, token, _claims} = Token.generate(user)
 
@@ -160,7 +175,7 @@ defmodule SysFcWeb.AuthController do
   def complete_registration(conn, _params) do
     conn
     |> put_status(:bad_request)
-    |> json(%{error: "phone, email and password are required"})
+    |> json(%{error: "phone and password are required"})
   end
 
   # POST /api/auth/forgot-password
