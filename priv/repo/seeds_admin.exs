@@ -50,3 +50,43 @@ case Repo.get_by(User, phone: admin2_phone) do
   _user ->
     IO.puts("Admin 2 já existe: #{admin2_phone}")
 end
+
+# ── Admin 3 (telefone: 11983534145) ──────────────────────────────────────────
+
+admin3_phone = "11983534145"
+
+case Repo.get_by(User, phone: admin3_phone) do
+  nil ->
+    %User{}
+    |> User.admin_stub_changeset(%{
+      name: "Administrador 3",
+      phone: admin3_phone,
+      role: :admin_master
+    })
+    |> Repo.insert!()
+
+    IO.puts("Admin 3 criado com sucesso: #{admin3_phone}")
+
+  _user ->
+    IO.puts("Admin 3 já existe: #{admin3_phone}")
+end
+
+# ── Admin 4 (telefone: 11983534146) ──────────────────────────────────────────
+
+admin4_phone = "11983534146"
+
+case Repo.get_by(User, phone: admin4_phone) do
+  nil ->
+    %User{}
+    |> User.admin_stub_changeset(%{
+      name: "Administrador 4",
+      phone: admin4_phone,
+      role: :admin_master
+    })
+    |> Repo.insert!()
+
+    IO.puts("Admin 4 criado com sucesso: #{admin4_phone}")
+
+  _user ->
+    IO.puts("Admin 4 já existe: #{admin4_phone}")
+end
