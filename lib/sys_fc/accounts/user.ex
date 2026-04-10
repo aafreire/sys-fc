@@ -8,6 +8,7 @@ defmodule SysFc.Accounts.User do
   schema "users" do
     field :name, :string
     field :email, :string
+    field :phone, :string
     field :password_hash, :string
     field :password, :string, virtual: true
     field :role, Ecto.Enum, values: [:admin_master, :admin_limited, :guardian], default: :guardian
@@ -36,6 +37,15 @@ defmodule SysFc.Accounts.User do
   Apenas nome e role são necessários.
   Se e-mail for fornecido, senha também é obrigatória (e vice-versa).
   """
+  @doc "Changeset para admin stub (telefone, sem email/senha)"
+  def admin_stub_changeset(user, attrs) do
+    user
+    |> cast(attrs, [:name, :phone, :role, :is_active])
+    |> validate_required([:name, :phone, :role])
+    |> validate_inclusion(:role, [:admin_master, :admin_limited])
+    |> unique_constraint(:phone, name: :users_phone_unique)
+  end
+
   def guardian_stub_changeset(user, attrs) do
     user
     |> cast(attrs, [:name, :email, :password, :role, :is_active])
@@ -49,12 +59,11 @@ defmodule SysFc.Accounts.User do
 
   @doc "Changeset para completar conta de responsável (adicionar e-mail e senha)"
   def complete_account_changeset(user, attrs) do
-    # If the user already has an email, only update password
-    fields = if is_nil(user.email), do: [:email, :password], else: [:password]
-    required = fields
+    required = [:password]
+    required = if is_nil(user.email), do: [:email | required], else: required
 
     user
-    |> cast(attrs, [:email, :password])
+    |> cast(attrs, [:email, :password, :name])
     |> validate_required(required)
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/, message: "must have the @ sign and no spaces")
     |> validate_length(:email, max: 160)

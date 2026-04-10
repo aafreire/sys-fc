@@ -46,26 +46,42 @@ defmodule SysFc.Accounts do
     end
   end
 
-  @doc "Autentica responsável por telefone e senha. Retorna {:ok, user} ou {:error, reason}."
+  @doc "Autentica por telefone e senha. Busca em guardians.phone e users.phone."
   def authenticate_by_phone(phone, password) do
-    guardian = find_guardian_by_phone(phone)
+    user = find_user_by_phone(phone)
 
     cond do
-      is_nil(guardian) ->
+      is_nil(user) ->
         Argon2.no_user_verify()
         {:error, :invalid_credentials}
 
-      not guardian.user.is_active ->
+      not user.is_active ->
         {:error, :inactive}
 
-      is_nil(guardian.user.password_hash) ->
+      is_nil(user.password_hash) ->
         {:error, :no_password}
 
-      not User.valid_password?(guardian.user, password) ->
+      not User.valid_password?(user, password) ->
         {:error, :invalid_credentials}
 
       true ->
-        {:ok, guardian.user}
+        {:ok, user}
+    end
+  end
+
+  @doc "Busca user por telefone — primeiro em users.phone, depois em guardians.phone."
+  def find_user_by_phone(phone) do
+    stripped = String.replace(phone, ~r/\D/, "")
+
+    # Try users.phone first (admins)
+    case User |> where([u], u.phone == ^stripped) |> Repo.one() do
+      %User{} = user -> user
+      nil ->
+        # Fallback to guardian.phone
+        case find_guardian_by_phone(stripped) do
+          nil -> nil
+          guardian -> guardian.user
+        end
     end
   end
 

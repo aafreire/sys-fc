@@ -61,7 +61,11 @@ if config_env() == :prod do
 
   host = System.get_env("PHX_HOST") || "example.com"
 
-  default_origins = ["http://localhost:5173", "http://localhost:8080", "http://localhost:3000"]
+  default_origins = [
+    "http://localhost:5173", "http://localhost:8080", "http://localhost:3000",
+    "https://adsaocaetanocampolimpo.com.br", "https://www.adsaocaetanocampolimpo.com.br",
+    "https://saocaetano.nebulagames.com.br"
+  ]
 
   cors_origins =
     case System.get_env("CORS_ORIGINS") do

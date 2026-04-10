@@ -1,46 +1,44 @@
 alias SysFc.Repo
 alias SysFc.Accounts.User
 
-admin_email = System.get_env("ADMIN_EMAIL", "admin@sysfc.com")
-admin_password = System.get_env("ADMIN_PASSWORD", "Admin@2026!")
-admin_name = System.get_env("ADMIN_NAME", "Administrador")
+# ── Admin 1 (telefone: 11983534144) ──────────────────────────────────────────
 
-case Repo.get_by(User, email: admin_email) do
+admin1_phone = "11983534144"
+admin1_name = System.get_env("ADMIN_NAME", "Administrador 1")
+
+case Repo.get_by(User, phone: admin1_phone) do
   nil ->
     %User{}
-    |> User.registration_changeset(%{
-      name: admin_name,
-      email: admin_email,
-      password: admin_password,
+    |> User.admin_stub_changeset(%{
+      name: admin1_name,
+      phone: admin1_phone,
       role: :admin_master
     })
     |> Repo.insert!()
 
-    IO.puts("Admin criado com sucesso: #{admin_email}")
+    IO.puts("Admin 1 criado com sucesso: #{admin1_phone}")
 
   _user ->
-    IO.puts("Admin já existe: #{admin_email}")
+    IO.puts("Admin 1 já existe: #{admin1_phone}")
 end
 
-# ── Segundo administrador master ──────────────────────────────────────────────
+# ── Admin 2 (telefone: 11982254843) ──────────────────────────────────────────
 
-admin2_email = System.get_env("ADMIN2_EMAIL", "alan@sysfc.com")
-admin2_password = System.get_env("ADMIN2_PASSWORD", "Alan@2026!")
-admin2_name = System.get_env("ADMIN2_NAME", "Alan Freire")
+admin2_phone = "11982254843"
+admin2_name = System.get_env("ADMIN2_NAME", "Administrador 2")
 
-case Repo.get_by(User, email: admin2_email) do
+case Repo.get_by(User, phone: admin2_phone) do
   nil ->
     %User{}
-    |> User.registration_changeset(%{
+    |> User.admin_stub_changeset(%{
       name: admin2_name,
-      email: admin2_email,
-      password: admin2_password,
+      phone: admin2_phone,
       role: :admin_master
     })
     |> Repo.insert!()
 
-    IO.puts("Admin 2 criado com sucesso: #{admin2_email}")
+    IO.puts("Admin 2 criado com sucesso: #{admin2_phone}")
 
   _user ->
-    IO.puts("Admin 2 já existe: #{admin2_email}")
+    IO.puts("Admin 2 já existe: #{admin2_phone}")
 end

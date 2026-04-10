@@ -2,7 +2,9 @@ defmodule SysFcWeb.AuthController do
   use SysFcWeb, :controller
 
   alias SysFc.Accounts
+  alias SysFc.Accounts.User
   alias SysFc.Auth.Token
+  alias SysFc.Repo
 
   # POST /api/auth/login (por e-mail)
   def login(conn, %{"email" => email, "password" => password}) when is_binary(email) and email != "" do
@@ -92,13 +94,35 @@ defmodule SysFcWeb.AuthController do
   end
 
   # GET /api/auth/check-phone?phone=11987654321
-  # Verifica se já existe responsável com aquele telefone (para fluxo de cadastro)
+  # Verifica se já existe usuário com aquele telefone (guardian ou admin)
   def check_phone(conn, %{"phone" => phone}) do
-    case Accounts.find_guardian_by_phone(phone) do
+    stripped = String.replace(phone, ~r/\D/, "")
+
+    # Check users.phone first (admins), then guardians.phone
+    case check_phone_lookup(stripped) do
       nil ->
         conn |> put_status(:ok) |> json(%{exists: false})
 
-      guardian ->
+      {:user, user} ->
+        has_email = not is_nil(user.email)
+        has_password = not is_nil(user.password_hash)
+        has_account = has_email and has_password
+
+        base = %{exists: true, has_account: has_account, name: user.name, role: user.role}
+
+        base =
+          if not has_account do
+            missing = []
+            missing = if not has_email, do: ["email" | missing], else: missing
+            missing = if not has_password, do: ["password" | missing], else: missing
+            Map.put(base, :missing_fields, missing)
+          else
+            base
+          end
+
+        conn |> put_status(:ok) |> json(base)
+
+      {:guardian, guardian} ->
         has_email = not is_nil(guardian.user.email)
         has_password = not is_nil(guardian.user.password_hash)
         has_account = has_email and has_password
@@ -107,7 +131,8 @@ defmodule SysFcWeb.AuthController do
           exists: true,
           has_account: has_account,
           guardian_id: guardian.id,
-          name: guardian.user.name
+          name: guardian.user.name,
+          role: guardian.user.role
         }
 
         base =
@@ -121,9 +146,18 @@ defmodule SysFcWeb.AuthController do
             base
           end
 
-        conn
-        |> put_status(:ok)
-        |> json(base)
+        conn |> put_status(:ok) |> json(base)
+    end
+  end
+
+  defp check_phone_lookup(stripped) do
+    case SysFc.Repo.get_by(SysFc.Accounts.User, phone: stripped) do
+      %SysFc.Accounts.User{} = user -> {:user, user}
+      nil ->
+        case Accounts.find_guardian_by_phone(stripped) do
+          nil -> nil
+          guardian -> {:guardian, guardian}
+        end
     end
   end
 
@@ -132,40 +166,59 @@ defmodule SysFcWeb.AuthController do
   end
 
   # POST /api/auth/complete-registration
-  # Responsável que foi pré-cadastrado pelo admin completa sua conta (e-mail + senha + cpf opcional)
+  # Completa conta de usuário pré-cadastrado (admin ou guardian)
   def complete_registration(conn, %{"phone" => phone, "password" => password} = params) do
+    stripped = String.replace(phone, ~r/\D/, "")
     email = params["email"]
-    case Accounts.find_guardian_by_phone(phone) do
+    name = params["name"]
+
+    case check_phone_lookup(stripped) do
       nil ->
         conn |> put_status(:not_found) |> json(%{error: "phone_not_found"})
 
-      guardian ->
+      {:user, user} ->
+        # Admin user with phone on users table
+        if not is_nil(user.password_hash) and not is_nil(user.email) do
+          conn |> put_status(:unprocessable_entity) |> json(%{error: "account_already_complete"})
+        else
+          final_email = if is_nil(user.email), do: email, else: user.email
+          attrs = %{password: password}
+          attrs = if final_email, do: Map.put(attrs, :email, final_email), else: attrs
+          attrs = if name && (is_nil(user.name) || user.name == ""), do: Map.put(attrs, :name, name), else: attrs
+
+          case Repo.update(User.complete_account_changeset(user, attrs)) do
+            {:ok, updated} ->
+              {:ok, token, _claims} = Token.generate(updated)
+              guardian = Accounts.get_guardian_by_user_id(updated.id)
+              conn |> put_status(:ok) |> render(:login, user: updated, token: token, guardian: guardian)
+
+            {:error, changeset} ->
+              conn |> put_status(:unprocessable_entity)
+              |> json(%{error: "validation_failed", details: format_errors(changeset)})
+          end
+        end
+
+      {:guardian, guardian} ->
         has_email = not is_nil(guardian.user.email)
         has_password = not is_nil(guardian.user.password_hash)
 
         if has_email and has_password do
           conn |> put_status(:unprocessable_entity) |> json(%{error: "account_already_complete"})
         else
-          # Update CPF if provided and not already set
           cpf = params["cpf"]
           if cpf && (is_nil(guardian.cpf) || guardian.cpf == "") do
             Accounts.update_guardian_cpf(guardian, cpf)
           end
 
-          # Use existing email if already set, otherwise use the provided one
           final_email = if has_email, do: guardian.user.email, else: email
 
           case Accounts.complete_guardian_account(guardian, final_email, password) do
             {:ok, %{user: user, guardian: g}} ->
               {:ok, token, _claims} = Token.generate(user)
-
-              conn
-              |> put_status(:ok)
-              |> render(:login, user: user, token: token, guardian: g)
+              conn |> put_status(:ok) |> render(:login, user: user, token: token, guardian: g)
 
             {:error, changeset} ->
-              conn
-              |> put_status(:unprocessable_entity)
+              conn |> put_status(:unprocessable_entity)
               |> json(%{error: "validation_failed", details: format_errors(changeset)})
           end
         end
