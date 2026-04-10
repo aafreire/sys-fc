@@ -173,6 +173,7 @@ defmodule SysFcWeb.Router do
 
     get  "/students",                 GuardianController, :my_students
     post "/students",                 StudentController, :guardian_create
+    put  "/students/:id",               StudentController, :guardian_update
     put  "/students/:id/toggle-freeze", StudentController, :guardian_freeze
     post "/students/:id/photo",          StudentController, :guardian_upload_photo
     get  "/fees",             FeeController, :guardian_index

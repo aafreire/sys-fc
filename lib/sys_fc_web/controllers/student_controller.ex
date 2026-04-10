@@ -204,6 +204,38 @@ defmodule SysFcWeb.StudentController do
     end
   end
 
+  # PUT /api/guardian/students/:id
+  def guardian_update(conn, %{"id" => id} = params) do
+    user = conn.assigns.current_user
+    guardian = SysFc.Accounts.get_guardian_by_user_id(user.id)
+
+    case Students.get_student(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      student ->
+        linked = Enum.any?(student.student_guardians, &(&1.guardian_id == guardian.id))
+
+        if not linked do
+          conn |> put_status(:forbidden) |> json(%{error: "not_your_student"})
+        else
+          # Guardian can only update: name, rg, address fields, school, health plan
+          allowed = Map.take(params, [
+            "name", "rg", "school_name",
+            "address", "address_number", "complement", "neighborhood", "city", "cep",
+            "has_health_plan", "health_plan_name"
+          ])
+
+          case Students.update_student(student, allowed) do
+            {:ok, updated} -> render(conn, :show, student: updated)
+            {:error, changeset} ->
+              conn |> put_status(:unprocessable_entity)
+              |> json(%{error: "validation_failed", details: format_errors(changeset)})
+          end
+        end
+    end
+  end
+
   # POST /api/admin/students/:id/photo
   def upload_photo(conn, %{"id" => id, "photo" => %Plug.Upload{} = upload}) do
     case Students.get_student(id) do
