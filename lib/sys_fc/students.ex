@@ -114,18 +114,20 @@ defmodule SysFc.Students do
 
   def deactivate_student(%Student{} = student) do
     student
-    |> Student.changeset(%{"is_active" => false})
+    |> Student.update_changeset(%{"is_active" => false})
     |> Repo.update()
   end
 
   @doc """
   Confirma um aluno pendente: muda status para :active e gera a mensalidade do mês.
   """
-  def confirm_student(%Student{} = student) do
+  def confirm_student(%Student{} = student, attrs \\ %{}) do
+    update_attrs = Map.merge(%{"status" => "active"}, attrs)
+
     Repo.transaction(fn ->
       with {:ok, confirmed} <-
              (student
-              |> Student.changeset(%{"status" => "active"})
+              |> Student.update_changeset(update_attrs)
               |> Repo.update()),
            {:ok, _fee} <- generate_current_fee(confirmed) do
         Repo.preload(confirmed, student_guardians: [guardian: :user])
@@ -140,7 +142,7 @@ defmodule SysFc.Students do
   """
   def reject_student(%Student{} = student) do
     student
-    |> Student.changeset(%{"status" => "rejected"})
+    |> Student.update_changeset(%{"status" => "rejected"})
     |> Repo.update()
     |> case do
       {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}
@@ -177,7 +179,7 @@ defmodule SysFc.Students do
   @doc "Congela a matrícula do aluno. Nenhuma mensalidade será gerada enquanto congelado."
   def freeze_student(%Student{} = student) do
     student
-    |> Student.changeset(%{"is_frozen" => true})
+    |> Student.update_changeset(%{"is_frozen" => true})
     |> Repo.update()
     |> case do
       {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}
@@ -188,7 +190,7 @@ defmodule SysFc.Students do
   @doc "Descongela a matrícula do aluno, reativando a geração de mensalidades."
   def unfreeze_student(%Student{} = student) do
     student
-    |> Student.changeset(%{"is_frozen" => false})
+    |> Student.update_changeset(%{"is_frozen" => false})
     |> Repo.update()
     |> case do
       {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}

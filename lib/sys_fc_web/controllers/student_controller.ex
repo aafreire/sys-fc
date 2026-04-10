@@ -108,13 +108,16 @@ defmodule SysFcWeb.StudentController do
   end
 
   # PUT /api/admin/students/:id/confirm
-  def confirm(conn, %{"id" => id}) do
+  def confirm(conn, %{"id" => id} = params) do
     case Students.get_student(id) do
       nil ->
         conn |> put_status(:not_found) |> json(%{error: "not_found"})
 
       student ->
-        case Students.confirm_student(student) do
+        # Accept optional extra attrs (e.g. rg) to update during confirmation
+        extra = Map.take(params, ["rg"])
+
+        case Students.confirm_student(student, extra) do
           {:ok, confirmed} ->
             render(conn, :show, student: confirmed)
 
