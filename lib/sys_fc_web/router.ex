@@ -105,7 +105,12 @@ defmodule SysFcWeb.Router do
     post   "/rental-unavailable",         RentalController, :create_unavailable
     delete "/rental-unavailable/:id",     RentalController, :delete_unavailable
     get    "/rentals",                    RentalController, :admin_index
+    post   "/rentals",                    RentalController, :admin_create
+    get    "/rentals/:id",                RentalController, :admin_show
     put    "/rentals/:id/status",         RentalController, :admin_update_status
+    get    "/rentals/:rental_id/fees",    RentalController, :list_fees
+    put    "/rental-fees/:id/mark-paid",  RentalController, :mark_fee_paid
+    put    "/rental-fees/:id/status",     RentalController, :update_fee_status
 
     # Campeonatos — gestão
     get  "/championships",                        ChampionshipController, :index

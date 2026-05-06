@@ -24,6 +24,10 @@ defmodule SysFcWeb.RentalJSON do
 
   def admin_show(%{rental: rental}), do: %{data: admin_rental_data(rental)}
 
+  def rental_fees(%{fees: fees}), do: %{data: Enum.map(fees, &fee_data/1)}
+
+  def rental_fee(%{fee: fee}), do: %{data: fee_data(fee)}
+
   # ── Helpers ───────────────────────────────────────────────────
 
   defp config_data(config) do
@@ -54,6 +58,18 @@ defmodule SysFcWeb.RentalJSON do
       payment_method: rental.payment_method,
       status: rental.status,
       notes: rental.notes,
+      court: rental.court,
+      start_time: rental.start_time,
+      end_time: rental.end_time,
+      renter_name: rental.renter_name,
+      renter_email: rental.renter_email,
+      renter_phone: rental.renter_phone,
+      is_recurring: rental.is_recurring,
+      recurrence_weekdays: rental.recurrence_weekdays,
+      recurrence_start_date: rental.recurrence_start_date,
+      recurrence_end_date: rental.recurrence_end_date,
+      monthly_amount: rental.monthly_amount,
+      created_by_admin: rental.created_by_admin,
       inserted_at: rental.inserted_at
     }
   end
@@ -65,6 +81,79 @@ defmodule SysFcWeb.RentalJSON do
         _ -> nil
       end
 
-    rental_data(rental) |> Map.put(:guardian_name, guardian_name)
+    fees =
+      case rental do
+        %{rental_fees: fees} when is_list(fees) -> Enum.map(fees, &fee_data/1)
+        _ -> []
+      end
+
+    rental_data(rental)
+    |> Map.put(:guardian_name, guardian_name)
+    |> Map.put(:fees, fees)
+    |> Map.put(:financial_summary, summarize_fees(fees))
+  end
+
+  defp summarize_fees([]), do: %{total: "0", paid: "0", pending: "0", overdue: 0}
+
+  defp summarize_fees(fees) do
+    today = Date.utc_today()
+
+    {total, paid, pending} =
+      Enum.reduce(fees, {Decimal.new(0), Decimal.new(0), Decimal.new(0)}, fn f, {t, p, q} ->
+        amount = to_decimal(f.amount)
+        t = Decimal.add(t, amount)
+
+        cond do
+          f.status == "paid" -> {t, Decimal.add(p, amount), q}
+          true -> {t, p, Decimal.add(q, amount)}
+        end
+      end)
+
+    overdue_count =
+      Enum.count(fees, fn f ->
+        f.status != "paid" and not is_nil(f.due_date) and
+          Date.compare(parse_due(f.due_date), today) == :lt
+      end)
+
+    %{
+      total: Decimal.to_string(total),
+      paid: Decimal.to_string(paid),
+      pending: Decimal.to_string(pending),
+      overdue: overdue_count
+    }
+  end
+
+  defp parse_due(%Date{} = d), do: d
+  defp parse_due(s) when is_binary(s) do
+    case Date.from_iso8601(s) do
+      {:ok, d} -> d
+      _ -> Date.utc_today()
+    end
+  end
+
+  defp to_decimal(nil), do: Decimal.new(0)
+  defp to_decimal(%Decimal{} = d), do: d
+  defp to_decimal(v) when is_binary(v) do
+    case Decimal.parse(v) do
+      {d, _} -> d
+      _ -> Decimal.new(0)
+    end
+  end
+  defp to_decimal(v) when is_integer(v), do: Decimal.new(v)
+  defp to_decimal(v) when is_float(v), do: Decimal.from_float(v)
+
+  defp fee_data(%{} = f) when is_map(f) do
+    %{
+      id: f.id,
+      rental_id: f.rental_id,
+      reference_month: f.reference_month,
+      reference_year: f.reference_year,
+      amount: f.amount,
+      due_date: f.due_date,
+      payment_date: f.payment_date,
+      status: f.status,
+      receipt_url: f.receipt_url,
+      notes: f.notes
+    }
   end
 end

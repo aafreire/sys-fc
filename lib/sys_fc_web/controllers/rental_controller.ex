@@ -62,6 +62,35 @@ defmodule SysFcWeb.RentalController do
     conn |> put_status(:ok) |> render(:admin_index, rentals: rentals)
   end
 
+  # GET /api/admin/rentals/:id
+  def admin_show(conn, %{"id" => id}) do
+    case Rentals.get_rental(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      rental ->
+        conn |> put_status(:ok) |> render(:admin_show, rental: rental)
+    end
+  end
+
+  # POST /api/admin/rentals
+  def admin_create(conn, params) do
+    case Rentals.create_admin_rental(params) do
+      {:ok, rental} ->
+        conn |> put_status(:created) |> render(:admin_show, rental: rental)
+
+      {:error, %Ecto.Changeset{} = changeset} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "validation_failed", details: format_errors(changeset)})
+
+      {:error, reason} ->
+        conn
+        |> put_status(:unprocessable_entity)
+        |> json(%{error: "failed", details: inspect(reason)})
+    end
+  end
+
   # PUT /api/admin/rentals/:id/status
   def admin_update_status(conn, %{"id" => id, "status" => status}) do
     case Rentals.get_rental(id) do
@@ -71,6 +100,7 @@ defmodule SysFcWeb.RentalController do
       rental ->
         case Rentals.update_rental_status(rental, status) do
           {:ok, updated} ->
+            updated = Rentals.get_rental(updated.id) || updated
             conn |> put_status(:ok) |> render(:admin_show, rental: updated)
 
           {:error, changeset} ->
@@ -83,6 +113,54 @@ defmodule SysFcWeb.RentalController do
 
   def admin_update_status(conn, _params) do
     conn |> put_status(:bad_request) |> json(%{error: "status is required"})
+  end
+
+  # ── Cobranças da locação (admin) ──────────────────────────────
+
+  # GET /api/admin/rentals/:rental_id/fees
+  def list_fees(conn, %{"rental_id" => rental_id}) do
+    fees = Rentals.list_rental_fees(rental_id)
+    conn |> put_status(:ok) |> render(:rental_fees, fees: fees)
+  end
+
+  # PUT /api/admin/rental-fees/:id/mark-paid
+  def mark_fee_paid(conn, %{"id" => id} = params) do
+    case Rentals.get_rental_fee(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      fee ->
+        payment_date = parse_date(params["payment_date"])
+
+        case Rentals.mark_rental_fee_paid(fee, payment_date) do
+          {:ok, updated} ->
+            conn |> put_status(:ok) |> render(:rental_fee, fee: updated)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "validation_failed", details: format_errors(changeset)})
+        end
+    end
+  end
+
+  # PUT /api/admin/rental-fees/:id/status
+  def update_fee_status(conn, %{"id" => id, "status" => status}) do
+    case Rentals.get_rental_fee(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      fee ->
+        case Rentals.update_rental_fee_status(fee, status) do
+          {:ok, updated} ->
+            conn |> put_status(:ok) |> render(:rental_fee, fee: updated)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "validation_failed", details: format_errors(changeset)})
+        end
+    end
   end
 
   # ── Calendário (autenticado, qualquer role) ───────────────────
@@ -146,6 +224,14 @@ defmodule SysFcWeb.RentalController do
     case Integer.parse(v) do
       {n, _} -> n
       :error  -> default
+    end
+  end
+
+  defp parse_date(nil), do: nil
+  defp parse_date(s) when is_binary(s) do
+    case Date.from_iso8601(s) do
+      {:ok, d} -> d
+      _ -> nil
     end
   end
 
