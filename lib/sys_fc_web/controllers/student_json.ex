@@ -20,6 +20,7 @@ defmodule SysFcWeb.StudentJSON do
       category: student.category,
       photo_url: student.photo_url,
       rg: student.rg,
+      cpf: format_cpf(student.cpf),
       school_name: student.school_name,
       address: student.address,
       address_number: student.address_number,

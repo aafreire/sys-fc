@@ -64,6 +64,8 @@ defmodule SysFcWeb.RentalJSON do
       renter_name: rental.renter_name,
       renter_email: rental.renter_email,
       renter_phone: rental.renter_phone,
+      renter_document_type: rental.renter_document_type,
+      renter_document: format_renter_document(rental.renter_document_type, rental.renter_document),
       is_recurring: rental.is_recurring,
       recurrence_weekdays: rental.recurrence_weekdays,
       recurrence_start_date: rental.recurrence_start_date,
@@ -141,6 +143,15 @@ defmodule SysFcWeb.RentalJSON do
   end
   defp to_decimal(v) when is_integer(v), do: Decimal.new(v)
   defp to_decimal(v) when is_float(v), do: Decimal.from_float(v)
+
+  defp format_renter_document(_, nil), do: nil
+  defp format_renter_document("cpf", cpf) when byte_size(cpf) == 11 do
+    String.slice(cpf, 0, 3) <> "." <>
+    String.slice(cpf, 3, 3) <> "." <>
+    String.slice(cpf, 6, 3) <> "-" <>
+    String.slice(cpf, 9, 2)
+  end
+  defp format_renter_document(_, value), do: value
 
   defp fee_data(%{} = f) when is_map(f) do
     %{

@@ -109,8 +109,9 @@ defmodule SysFcWeb.Router do
     get    "/rentals/:id",                RentalController, :admin_show
     put    "/rentals/:id/status",         RentalController, :admin_update_status
     get    "/rentals/:rental_id/fees",    RentalController, :list_fees
-    put    "/rental-fees/:id/mark-paid",  RentalController, :mark_fee_paid
-    put    "/rental-fees/:id/status",     RentalController, :update_fee_status
+    put    "/rental-fees/:id/mark-paid",   RentalController, :mark_fee_paid
+    put    "/rental-fees/:id/mark-unpaid", RentalController, :mark_fee_unpaid
+    put    "/rental-fees/:id/status",      RentalController, :update_fee_status
 
     # Campeonatos — gestão
     get  "/championships",                        ChampionshipController, :index
@@ -155,6 +156,7 @@ defmodule SysFcWeb.Router do
     put  "/fees/batch-mark-paid",    FeeController, :batch_mark_paid
     get  "/fees/:id",                FeeController, :show
     put  "/fees/:id/mark-paid",      FeeController, :mark_paid
+    put  "/fees/:id/mark-unpaid",    FeeController, :mark_unpaid
   end
 
   # ── Rotas exclusivas admin_master ─────────────────────────

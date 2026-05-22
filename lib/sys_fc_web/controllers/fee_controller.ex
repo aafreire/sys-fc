@@ -73,6 +73,24 @@ defmodule SysFcWeb.FeeController do
     end
   end
 
+  # PUT /api/admin/fees/:id/mark-unpaid
+  def mark_unpaid(conn, %{"id" => id}) do
+    case Finance.get_fee(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      fee ->
+        case Finance.mark_as_unpaid(fee) do
+          {:ok, updated} -> render(conn, :show, fee: updated)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "validation_failed", details: format_errors(changeset)})
+        end
+    end
+  end
+
   # PUT /api/admin/fees/:id/mark-paid
   def mark_paid(conn, %{"id" => id} = params) do
     case Finance.get_fee(id) do

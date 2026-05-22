@@ -85,6 +85,24 @@ defmodule SysFc.Finance do
     |> Repo.update()
   end
 
+  @doc """
+  Desfaz a marcação de pagamento de uma mensalidade. Retorna o status
+  para `:overdue` se a data de vencimento já passou, senão `:pending`.
+  """
+  def mark_as_unpaid(%Fee{} = fee) do
+    today = Date.utc_today()
+    new_status =
+      if fee.due_date && Date.compare(fee.due_date, today) == :lt do
+        :overdue
+      else
+        :pending
+      end
+
+    fee
+    |> Fee.changeset(%{status: new_status, payment_date: nil})
+    |> Repo.update()
+  end
+
   def mark_as_under_analysis(%Fee{} = fee, receipt_url) do
     fee
     |> Fee.changeset(%{status: :under_analysis, receipt_url: receipt_url})

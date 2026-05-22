@@ -15,6 +15,7 @@ defmodule SysFc.Students.Student do
     field :category, :string
     field :photo_url, :string
     field :rg, :string
+    field :cpf, :string
     field :school_name, :string
     field :address, :string
     field :address_number, :string
@@ -46,33 +47,7 @@ defmodule SysFc.Students.Student do
     student
     |> cast(attrs, [
       :enrollment_number, :name, :birth_date, :category, :photo_url,
-      :rg, :school_name, :address, :address_number, :neighborhood,
-      :city, :complement, :cep, :training_days, :training_plan, :training_location,
-      :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
-      :is_active, :is_frozen, :status
-    ])
-    |> validate_required([:enrollment_number, :name, :birth_date, :category, :monthly_fee, :rg])
-    |> validate_inclusion(:category, @categories)
-    |> validate_inclusion(:status, @statuses)
-    |> validate_number(:monthly_fee, greater_than_or_equal_to: 0)
-    |> validate_number(:billing_day,
-        greater_than_or_equal_to: 1,
-        less_than_or_equal_to: 28,
-        message: "deve ser entre 1 e 28"
-      )
-    |> sanitize_cep()
-    |> validate_cep_format()
-    |> validate_rg_format()
-    |> unique_constraint(:enrollment_number)
-    |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
-  end
-
-  @doc "Changeset para atualização — RG não obrigatório (permite atualizar alunos legados)."
-  def update_changeset(student, attrs) do
-    student
-    |> cast(attrs, [
-      :enrollment_number, :name, :birth_date, :category, :photo_url,
-      :rg, :school_name, :address, :address_number, :neighborhood,
+      :rg, :cpf, :school_name, :address, :address_number, :neighborhood,
       :city, :complement, :cep, :training_days, :training_plan, :training_location,
       :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
       :is_active, :is_frozen, :status
@@ -89,8 +64,41 @@ defmodule SysFc.Students.Student do
     |> sanitize_cep()
     |> validate_cep_format()
     |> validate_rg_format()
+    |> sanitize_cpf()
+    |> validate_cpf_format()
+    |> validate_document_present()
     |> unique_constraint(:enrollment_number)
     |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
+    |> unique_constraint(:cpf, name: :students_cpf_unique, message: "já existe um aluno cadastrado com este CPF")
+  end
+
+  @doc "Changeset para atualização — RG/CPF não obrigatórios (permite atualizar alunos legados)."
+  def update_changeset(student, attrs) do
+    student
+    |> cast(attrs, [
+      :enrollment_number, :name, :birth_date, :category, :photo_url,
+      :rg, :cpf, :school_name, :address, :address_number, :neighborhood,
+      :city, :complement, :cep, :training_days, :training_plan, :training_location,
+      :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
+      :is_active, :is_frozen, :status
+    ])
+    |> validate_required([:enrollment_number, :name, :birth_date, :category, :monthly_fee])
+    |> validate_inclusion(:category, @categories)
+    |> validate_inclusion(:status, @statuses)
+    |> validate_number(:monthly_fee, greater_than_or_equal_to: 0)
+    |> validate_number(:billing_day,
+        greater_than_or_equal_to: 1,
+        less_than_or_equal_to: 28,
+        message: "deve ser entre 1 e 28"
+      )
+    |> sanitize_cep()
+    |> validate_cep_format()
+    |> validate_rg_format()
+    |> sanitize_cpf()
+    |> validate_cpf_format()
+    |> unique_constraint(:enrollment_number)
+    |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
+    |> unique_constraint(:cpf, name: :students_cpf_unique, message: "já existe um aluno cadastrado com este CPF")
   end
 
   # Normaliza CEP: aceita "00000-000" ou "00000000" → armazena sem hífen
@@ -127,4 +135,40 @@ defmodule SysFc.Students.Student do
           )
     end
   end
+
+  # Normaliza CPF: armazena somente dígitos
+  defp sanitize_cpf(changeset) do
+    case get_change(changeset, :cpf) do
+      nil -> changeset
+      "" -> put_change(changeset, :cpf, nil)
+      cpf -> put_change(changeset, :cpf, String.replace(cpf, ~r/\D/, ""))
+    end
+  end
+
+  defp validate_cpf_format(changeset) do
+    case get_field(changeset, :cpf) do
+      nil -> changeset
+      "" -> changeset
+      _ ->
+        validate_format(changeset, :cpf, ~r/^\d{11}$/,
+          message: "deve ter 11 dígitos numéricos"
+        )
+    end
+  end
+
+  # Para criação: pelo menos um documento (RG ou CPF) deve ser informado
+  defp validate_document_present(changeset) do
+    rg = get_field(changeset, :rg)
+    cpf = get_field(changeset, :cpf)
+
+    if blank?(rg) and blank?(cpf) do
+      add_error(changeset, :rg, "informe RG ou CPF")
+    else
+      changeset
+    end
+  end
+
+  defp blank?(nil), do: true
+  defp blank?(""), do: true
+  defp blank?(_), do: false
 end

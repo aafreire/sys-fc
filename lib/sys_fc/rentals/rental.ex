@@ -26,6 +26,8 @@ defmodule SysFc.Rentals.Rental do
     field :renter_name, :string
     field :renter_email, :string
     field :renter_phone, :string
+    field :renter_document_type, :string
+    field :renter_document, :string
 
     field :is_recurring, :boolean, default: false
     field :recurrence_weekdays, {:array, :integer}, default: []
@@ -81,6 +83,7 @@ defmodule SysFc.Rentals.Rental do
       :date, :hours, :pricing_type, :amount, :payment_method,
       :status, :notes, :guardian_id, :court, :start_time, :end_time,
       :renter_name, :renter_email, :renter_phone,
+      :renter_document_type, :renter_document,
       :is_recurring, :recurrence_weekdays, :recurrence_start_date,
       :recurrence_end_date, :monthly_amount, :created_by_admin
     ])
@@ -94,10 +97,51 @@ defmodule SysFc.Rentals.Rental do
     |> maybe_validate_payment_method()
     |> validate_recurrence()
     |> validate_single()
+    |> validate_renter_document()
     |> foreign_key_constraint(:guardian_id)
     |> unique_constraint([:date, :court],
         name: :rentals_date_court_active,
         message: "Esta quadra já está reservada nesta data"
+      )
+  end
+
+  defp validate_renter_document(changeset) do
+    type = get_field(changeset, :renter_document_type)
+    doc = get_field(changeset, :renter_document)
+
+    cond do
+      is_nil(type) and is_nil(doc) ->
+        changeset
+
+      type in ["rg", "cpf"] and is_binary(doc) and doc != "" ->
+        changeset
+        |> put_change(:renter_document, sanitize_document(type, doc))
+        |> validate_document_format(type)
+
+      type in ["rg", "cpf"] ->
+        add_error(changeset, :renter_document, "informe o documento")
+
+      true ->
+        add_error(changeset, :renter_document_type, "deve ser rg ou cpf")
+    end
+  end
+
+  defp sanitize_document("cpf", value), do: String.replace(value, ~r/\D/, "")
+  defp sanitize_document(_, value), do: value
+
+  defp validate_document_format(changeset, "cpf") do
+    validate_format(changeset, :renter_document, ~r/^\d{11}$/,
+      message: "CPF deve ter 11 dígitos"
+    )
+  end
+
+  defp validate_document_format(changeset, "rg") do
+    changeset
+    |> validate_length(:renter_document, min: 5, max: 20,
+        message: "RG deve ter entre 5 e 20 caracteres"
+      )
+    |> validate_format(:renter_document, ~r/^[\d.\-xX\/]+$/,
+        message: "RG contém caracteres inválidos"
       )
   end
 

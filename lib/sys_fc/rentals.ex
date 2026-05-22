@@ -488,6 +488,24 @@ defmodule SysFc.Rentals do
     |> Repo.update()
   end
 
+  @doc """
+  Desfaz a marcação de pagamento de uma cobrança de locação.
+  Retorna para "overdue" se já passou do vencimento, senão "pending".
+  """
+  def mark_rental_fee_unpaid(%RentalFee{} = fee) do
+    today = Date.utc_today()
+    new_status =
+      if fee.due_date && Date.compare(fee.due_date, today) == :lt do
+        "overdue"
+      else
+        "pending"
+      end
+
+    fee
+    |> RentalFee.changeset(%{status: new_status, payment_date: nil})
+    |> Repo.update()
+  end
+
   def update_rental_fee_status(%RentalFee{} = fee, status) do
     fee
     |> RentalFee.changeset(%{status: status})

@@ -144,6 +144,25 @@ defmodule SysFcWeb.RentalController do
     end
   end
 
+  # PUT /api/admin/rental-fees/:id/mark-unpaid
+  def mark_fee_unpaid(conn, %{"id" => id}) do
+    case Rentals.get_rental_fee(id) do
+      nil ->
+        conn |> put_status(:not_found) |> json(%{error: "not_found"})
+
+      fee ->
+        case Rentals.mark_rental_fee_unpaid(fee) do
+          {:ok, updated} ->
+            conn |> put_status(:ok) |> render(:rental_fee, fee: updated)
+
+          {:error, changeset} ->
+            conn
+            |> put_status(:unprocessable_entity)
+            |> json(%{error: "validation_failed", details: format_errors(changeset)})
+        end
+    end
+  end
+
   # PUT /api/admin/rental-fees/:id/status
   def update_fee_status(conn, %{"id" => id, "status" => status}) do
     case Rentals.get_rental_fee(id) do

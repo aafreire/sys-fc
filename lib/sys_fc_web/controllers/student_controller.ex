@@ -114,8 +114,8 @@ defmodule SysFcWeb.StudentController do
         conn |> put_status(:not_found) |> json(%{error: "not_found"})
 
       student ->
-        # Accept optional extra attrs (e.g. rg) to update during confirmation
-        extra = Map.take(params, ["rg"])
+        # Accept optional extra attrs (e.g. rg, cpf) to update during confirmation
+        extra = Map.take(params, ["rg", "cpf"])
 
         case Students.confirm_student(student, extra) do
           {:ok, confirmed} ->
@@ -222,9 +222,9 @@ defmodule SysFcWeb.StudentController do
         if not linked do
           conn |> put_status(:forbidden) |> json(%{error: "not_your_student"})
         else
-          # Guardian can only update: name, rg, address fields, school, health plan
+          # Guardian can only update: name, rg/cpf, address fields, school, health plan
           allowed = Map.take(params, [
-            "name", "rg", "school_name",
+            "name", "rg", "cpf", "school_name",
             "address", "address_number", "complement", "neighborhood", "city", "cep",
             "has_health_plan", "health_plan_name"
           ])
