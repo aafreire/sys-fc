@@ -12,8 +12,8 @@ defmodule SysFc.Application do
       SysFc.Repo,
       {DNSCluster, query: Application.get_env(:sys_fc, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: SysFc.PubSub},
-      # Start a worker by calling: SysFc.Worker.start_link(arg)
-      # {SysFc.Worker, arg},
+      # Geração automática mensal de mensalidades (alunos ativos não congelados)
+      SysFc.Finance.MonthlyFeeScheduler,
       # Start to serve requests, typically the last entry
       SysFcWeb.Endpoint
     ]

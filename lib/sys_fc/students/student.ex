@@ -34,6 +34,9 @@ defmodule SysFc.Students.Student do
     field :is_frozen, :boolean, default: false
     field :status, :string, default: "active"
 
+    belongs_to :unit, SysFc.Units.Unit
+    belongs_to :court, SysFc.Units.Court
+
     has_many :student_guardians, SysFc.Students.StudentGuardian
     has_many :guardians, through: [:student_guardians, :guardian]
     has_many :fees, SysFc.Finance.Fee
@@ -50,7 +53,7 @@ defmodule SysFc.Students.Student do
       :rg, :cpf, :school_name, :address, :address_number, :neighborhood,
       :city, :complement, :cep, :training_days, :training_plan, :training_location,
       :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
-      :is_active, :is_frozen, :status
+      :is_active, :is_frozen, :status, :unit_id, :court_id
     ])
     |> validate_required([:enrollment_number, :name, :birth_date, :category, :monthly_fee])
     |> validate_inclusion(:category, @categories)
@@ -69,6 +72,8 @@ defmodule SysFc.Students.Student do
     |> unique_constraint(:enrollment_number)
     |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
     |> unique_constraint(:cpf, name: :students_cpf_unique, message: "já existe um aluno cadastrado com este CPF")
+    |> foreign_key_constraint(:unit_id)
+    |> foreign_key_constraint(:court_id)
   end
 
   @doc "Changeset para atualização — RG/CPF não obrigatórios (permite atualizar alunos legados)."
@@ -79,7 +84,7 @@ defmodule SysFc.Students.Student do
       :rg, :cpf, :school_name, :address, :address_number, :neighborhood,
       :city, :complement, :cep, :training_days, :training_plan, :training_location,
       :has_health_plan, :health_plan_name, :monthly_fee, :billing_day,
-      :is_active, :is_frozen, :status
+      :is_active, :is_frozen, :status, :unit_id, :court_id
     ])
     |> validate_required([:enrollment_number, :name, :birth_date, :category, :monthly_fee])
     |> validate_inclusion(:category, @categories)
@@ -98,6 +103,8 @@ defmodule SysFc.Students.Student do
     |> unique_constraint(:enrollment_number)
     |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
     |> unique_constraint(:cpf, name: :students_cpf_unique, message: "já existe um aluno cadastrado com este CPF")
+    |> foreign_key_constraint(:unit_id)
+    |> foreign_key_constraint(:court_id)
   end
 
   # Normaliza CEP: aceita "00000-000" ou "00000000" → armazena sem hífen

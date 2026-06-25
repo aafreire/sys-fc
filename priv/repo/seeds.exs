@@ -99,6 +99,25 @@ Enum.each(training_locations_data, fn attrs ->
   end
 end)
 
+# ── Unidades e Quadras ──────────────────────────────────────────────────────────
+
+units_data = [
+  %{"name" => "Unidade A", "sort_order" => 1, "courts" => ["Quadra 1", "Quadra 2"]},
+  %{"name" => "Unidade B", "sort_order" => 2, "courts" => ["Campo Society", "Quadra 1"]}
+]
+
+Enum.each(units_data, fn attrs ->
+  case SysFc.Repo.get_by(SysFc.Units.Unit, name: attrs["name"]) do
+    nil ->
+      {:ok, unit} = SysFc.Units.create_unit(Map.take(attrs, ["name", "sort_order"]))
+      Enum.each(attrs["courts"], fn court -> {:ok, _} = SysFc.Units.create_court(unit.id, %{"name" => court}) end)
+      IO.puts("  ok Unidade: #{attrs["name"]} (#{Enum.join(attrs["courts"], ", ")})")
+
+    _ ->
+      IO.puts("  -- Unidade já existe: #{attrs["name"]}")
+  end
+end)
+
 # ── Responsáveis e Alunos ──────────────────────────────────────────────────────
 #
 # Cada família tem: email, senha, cpf, telefone, nome do responsável

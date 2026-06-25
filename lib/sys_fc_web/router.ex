@@ -99,6 +99,14 @@ defmodule SysFcWeb.Router do
     put    "/training-locations/:id",   TrainingPlanController, :update_location
     delete "/training-locations/:id",   TrainingPlanController, :delete_location
 
+    # Unidades e suas quadras (admin CRUD)
+    post   "/units",                    UnitController, :create
+    put    "/units/:id",                UnitController, :update
+    delete "/units/:id",                UnitController, :delete
+    post   "/units/:unit_id/courts",    UnitController, :create_court
+    put    "/courts/:id",               UnitController, :update_court
+    delete "/courts/:id",               UnitController, :delete_court
+
     # Aluguel de quadra/salão — config, disponibilidade e gestão (admin)
     get    "/rental-config",              RentalController, :get_config
     put    "/rental-config",              RentalController, :update_config
@@ -222,6 +230,7 @@ defmodule SysFcWeb.Router do
     pipe_through [:api, :authenticated]
 
     get "/training-plans",  TrainingPlanController, :index
+    get "/units",            UnitController, :index
     get "/rentals/calendar", RentalController, :calendar
   end
 

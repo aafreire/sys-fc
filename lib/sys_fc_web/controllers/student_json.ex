@@ -38,10 +38,20 @@ defmodule SysFcWeb.StudentJSON do
       is_active: student.is_active,
       is_frozen: student.is_frozen,
       status: student.status,
+      unit_id: student.unit_id,
+      unit: unit_summary(student),
+      court_id: student.court_id,
+      court: court_summary(student),
       inserted_at: student.inserted_at,
       guardians: guardian_list(student)
     }
   end
+
+  defp unit_summary(%{unit: %SysFc.Units.Unit{} = unit}), do: %{id: unit.id, name: unit.name}
+  defp unit_summary(_), do: nil
+
+  defp court_summary(%{court: %SysFc.Units.Court{} = court}), do: %{id: court.id, name: court.name}
+  defp court_summary(_), do: nil
 
   defp guardian_list(%{student_guardians: sgs}) when is_list(sgs) do
     Enum.map(sgs, fn sg ->

@@ -9,6 +9,7 @@ defmodule SysFcWeb.StudentController do
       []
       |> maybe_filter(:category, params["category"])
       |> maybe_filter(:search, params["search"])
+      |> maybe_filter(:unit_id, params["unit_id"])
       |> maybe_filter(:is_active, parse_bool(params["is_active"], true))
       |> maybe_filter(:guardian_id, params["guardian_id"])
       |> maybe_filter(:guardian_search, params["guardian_search"])

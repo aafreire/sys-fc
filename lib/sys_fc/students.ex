@@ -28,7 +28,7 @@ defmodule SysFc.Students do
       |> order_by([s], asc: s.name)
       |> limit(^per_page)
       |> offset(^((page - 1) * per_page))
-      |> preload(student_guardians: [guardian: :user])
+      |> preload([:unit, :court, student_guardians: [guardian: :user]])
       |> Repo.all()
 
     %{data: students, meta: %{page: page, per_page: per_page, total: total}}
@@ -36,7 +36,7 @@ defmodule SysFc.Students do
 
   def get_student(id) do
     Student
-    |> preload(student_guardians: [guardian: :user])
+    |> preload([:unit, :court, student_guardians: [guardian: :user]])
     |> Repo.get(id)
   end
 
@@ -60,9 +60,25 @@ defmodule SysFc.Students do
 
   def document_exists?(_, _), do: false
 
+  @doc """
+  Vincula todos os alunos sem unidade à primeira unidade cadastrada
+  (alunos antigos, anteriores ao controle por unidades). Idempotente.
+  """
+  def assign_default_unit_to_unassigned do
+    case SysFc.Units.default_unit() do
+      nil ->
+        {0, nil}
+
+      unit ->
+        Student
+        |> where([s], is_nil(s.unit_id))
+        |> Repo.update_all(set: [unit_id: unit.id])
+    end
+  end
+
   def get_student!(id) do
     Student
-    |> preload(student_guardians: [guardian: :user])
+    |> preload([:unit, :court, student_guardians: [guardian: :user]])
     |> Repo.get!(id)
   end
 
@@ -72,7 +88,7 @@ defmodule SysFc.Students do
       on: sg.student_id == s.id and sg.guardian_id == ^guardian_id
     )
     |> order_by([s], asc: s.name)
-    |> preload(student_guardians: [guardian: :user])
+    |> preload([:unit, :court, student_guardians: [guardian: :user]])
     |> Repo.all()
   end
 
@@ -92,7 +108,7 @@ defmodule SysFc.Students do
       with {:ok, student} <- insert_student(attrs),
            {:ok, _sg} <- link_guardian(student.id, guardian_id, true),
            {:ok, _fee} <- generate_current_fee(student) do
-        Repo.preload(student, student_guardians: [guardian: :user])
+        Repo.preload(student, [:unit, :court, student_guardians: [guardian: :user]])
       else
         {:error, changeset} -> Repo.rollback(changeset)
       end
@@ -111,7 +127,7 @@ defmodule SysFc.Students do
     Repo.transaction(fn ->
       with {:ok, student} <- insert_student(attrs),
            {:ok, _sg} <- link_guardian(student.id, guardian_id, true) do
-        Repo.preload(student, student_guardians: [guardian: :user])
+        Repo.preload(student, [:unit, :court, student_guardians: [guardian: :user]])
       else
         {:error, changeset} -> Repo.rollback(changeset)
       end
@@ -127,7 +143,7 @@ defmodule SysFc.Students do
     |> Student.update_changeset(attrs)
     |> Repo.update()
     |> case do
-      {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}
+      {:ok, updated} -> {:ok, Repo.preload(updated, [:unit, :court, student_guardians: [guardian: :user]])}
       error -> error
     end
   end
@@ -150,7 +166,7 @@ defmodule SysFc.Students do
               |> Student.update_changeset(update_attrs)
               |> Repo.update()),
            {:ok, _fee} <- generate_current_fee(confirmed) do
-        Repo.preload(confirmed, student_guardians: [guardian: :user])
+        Repo.preload(confirmed, [:unit, :court, student_guardians: [guardian: :user]])
       else
         {:error, changeset} -> Repo.rollback(changeset)
       end
@@ -165,7 +181,7 @@ defmodule SysFc.Students do
     |> Student.update_changeset(%{"status" => "rejected"})
     |> Repo.update()
     |> case do
-      {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}
+      {:ok, updated} -> {:ok, Repo.preload(updated, [:unit, :court, student_guardians: [guardian: :user]])}
       error -> error
     end
   end
@@ -188,7 +204,7 @@ defmodule SysFc.Students do
       |> order_by([s], asc: s.inserted_at)
       |> limit(^per_page)
       |> offset(^((page - 1) * per_page))
-      |> preload(student_guardians: [guardian: :user])
+      |> preload([:unit, :court, student_guardians: [guardian: :user]])
       |> Repo.all()
 
     %{data: students, meta: %{page: page, per_page: per_page, total: total}}
@@ -202,7 +218,7 @@ defmodule SysFc.Students do
     |> Student.update_changeset(%{"is_frozen" => true})
     |> Repo.update()
     |> case do
-      {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}
+      {:ok, updated} -> {:ok, Repo.preload(updated, [:unit, :court, student_guardians: [guardian: :user]])}
       error -> error
     end
   end
@@ -213,7 +229,7 @@ defmodule SysFc.Students do
     |> Student.update_changeset(%{"is_frozen" => false})
     |> Repo.update()
     |> case do
-      {:ok, updated} -> {:ok, Repo.preload(updated, student_guardians: [guardian: :user])}
+      {:ok, updated} -> {:ok, Repo.preload(updated, [:unit, :court, student_guardians: [guardian: :user]])}
       error -> error
     end
   end
@@ -243,9 +259,26 @@ defmodule SysFc.Students do
 
     attrs
     |> Map.put("enrollment_number", enrollment)
+    |> maybe_put_default_unit()
     |> then(&Student.changeset(%Student{}, &1))
     |> Repo.insert()
   end
+
+  # Se nenhuma unidade foi informada, vincula à primeira unidade cadastrada.
+  defp maybe_put_default_unit(attrs) do
+    if blank?(Map.get(attrs, "unit_id") || Map.get(attrs, :unit_id)) do
+      case SysFc.Units.default_unit() do
+        nil -> attrs
+        unit -> Map.put(attrs, "unit_id", unit.id)
+      end
+    else
+      attrs
+    end
+  end
+
+  defp blank?(nil), do: true
+  defp blank?(""), do: true
+  defp blank?(_), do: false
 
   defp generate_enrollment_number do
     year = Date.utc_today().year
@@ -285,6 +318,9 @@ defmodule SysFc.Students do
 
       {:status, status}, q when is_binary(status) ->
         where(q, [s], s.status == ^status)
+
+      {:unit_id, unit_id}, q when is_binary(unit_id) and unit_id != "" ->
+        where(q, [s], s.unit_id == ^unit_id)
 
       {:search, term}, q when is_binary(term) and term != "" ->
         like = "%#{term}%"
