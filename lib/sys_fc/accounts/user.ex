@@ -72,15 +72,17 @@ defmodule SysFc.Accounts.User do
     |> hash_password()
   end
 
-  @doc "Changeset para atualização de dados (sem senha)"
+  @doc "Changeset para atualização de dados. Se `password` for passado, é validado e hasheado."
   def update_changeset(user, attrs) do
     user
-    |> cast(attrs, [:name, :email, :role, :is_active])
+    |> cast(attrs, [:name, :email, :password, :role, :is_active])
     |> validate_required([:name, :role])
     |> validate_format(:email, ~r/^[^\s]+@[^\s]+$/)
     |> validate_length(:email, max: 160)
     |> validate_inclusion(:role, [:admin_master, :admin_limited, :guardian])
+    |> validate_password_if_present()
     |> unique_constraint(:email)
+    |> hash_password()
   end
 
   defp validate_email_if_present(changeset) do
