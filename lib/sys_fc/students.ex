@@ -40,6 +40,26 @@ defmodule SysFc.Students do
     |> Repo.get(id)
   end
 
+  @doc """
+  Verifica se já existe um aluno cadastrado com o documento informado.
+  Aceita type "cpf" ou "rg". CPF é comparado apenas pelos dígitos.
+  """
+  def document_exists?("cpf", value) when is_binary(value) do
+    digits = String.replace(value, ~r/\D/, "")
+
+    if digits == "" do
+      false
+    else
+      Repo.exists?(from s in Student, where: s.cpf == ^digits)
+    end
+  end
+
+  def document_exists?("rg", value) when is_binary(value) and value != "" do
+    Repo.exists?(from s in Student, where: s.rg == ^value)
+  end
+
+  def document_exists?(_, _), do: false
+
   def get_student!(id) do
     Student
     |> preload(student_guardians: [guardian: :user])

@@ -195,9 +195,12 @@ defmodule SysFc.Rentals do
       |> Map.put("guardian_id", guardian_id)
       |> Map.put("amount", amount)
 
-    %Rental{}
-    |> Rental.changeset(attrs)
-    |> Repo.insert()
+    changeset = Rental.changeset(%Rental{}, attrs)
+
+    case check_single_conflicts(changeset) do
+      :ok -> Repo.insert(changeset)
+      {:error, changeset} -> {:error, changeset}
+    end
   end
 
   def get_rental!(id), do: Repo.get!(Rental, id)
@@ -220,10 +223,10 @@ defmodule SysFc.Rentals do
     from f in RentalFee, order_by: [asc: f.due_date]
   end
 
-  @doc "Atualiza o status de uma reserva."
+  @doc "Atualiza o status de uma reserva (ex.: cancelar)."
   def update_rental_status(%Rental{} = rental, status) do
     rental
-    |> Rental.changeset(%{"status" => status})
+    |> Rental.status_changeset(%{"status" => status})
     |> Repo.update()
   end
 
@@ -301,6 +304,8 @@ defmodule SysFc.Rentals do
     if changeset.valid? do
       court = Ecto.Changeset.get_field(changeset, :court)
       is_recurring = Ecto.Changeset.get_field(changeset, :is_recurring)
+      start_time = Ecto.Changeset.get_field(changeset, :start_time)
+      end_time = Ecto.Changeset.get_field(changeset, :end_time)
 
       cond do
         is_recurring ->
@@ -308,7 +313,7 @@ defmodule SysFc.Rentals do
           rs = Ecto.Changeset.get_field(changeset, :recurrence_start_date)
           re = Ecto.Changeset.get_field(changeset, :recurrence_end_date) || add_months(rs, @default_recurrence_months)
 
-          if has_recurrence_conflict?(court, weekdays, rs, re) do
+          if has_recurrence_conflict?(court, weekdays, rs, re, start_time, end_time) do
             {:error,
               changeset
               |> Ecto.Changeset.add_error(:recurrence_weekdays, "conflito de horário com outra locação na mesma quadra")
@@ -320,10 +325,10 @@ defmodule SysFc.Rentals do
         true ->
           date = Ecto.Changeset.get_field(changeset, :date)
 
-          if has_single_conflict?(court, date) do
+          if has_single_conflict?(court, date, start_time, end_time) do
             {:error,
               changeset
-              |> Ecto.Changeset.add_error(:date, "Esta quadra já está reservada nesta data")
+              |> Ecto.Changeset.add_error(:date, "Esta quadra já está reservada neste horário")
             }
           else
             :ok
@@ -334,20 +339,56 @@ defmodule SysFc.Rentals do
     end
   end
 
-  defp has_single_conflict?(court, date) when not is_nil(court) and not is_nil(date) do
-    # Conflito direto: outra reserva única ativa no mesmo dia + quadra
+  # Conflito para o fluxo do responsável (sempre locação única).
+  defp check_single_conflicts(changeset) do
+    if changeset.valid? do
+      court = Ecto.Changeset.get_field(changeset, :court)
+      date = Ecto.Changeset.get_field(changeset, :date)
+      start_time = Ecto.Changeset.get_field(changeset, :start_time)
+      end_time = Ecto.Changeset.get_field(changeset, :end_time)
+
+      if has_single_conflict?(court, date, start_time, end_time) do
+        {:error,
+          changeset
+          |> Ecto.Changeset.add_error(:date, "Esta quadra já está reservada neste horário")
+        }
+      else
+        :ok
+      end
+    else
+      {:error, changeset}
+    end
+  end
+
+  @doc """
+  Verifica se há sobreposição de horário entre dois intervalos.
+  Quando algum horário não está definido, considera o dia inteiro ocupado.
+  Horários consecutivos (ex.: 16h-17h e 17h-18h) NÃO se sobrepõem.
+  """
+  def time_overlap?(s1, e1, s2, e2) do
+    if is_nil(s1) or is_nil(e1) or is_nil(s2) or is_nil(e2) do
+      true
+    else
+      Time.compare(s1, e2) == :lt and Time.compare(s2, e1) == :lt
+    end
+  end
+
+  defp has_single_conflict?(court, date, start_time, end_time)
+       when not is_nil(court) and not is_nil(date) do
+    # Reservas únicas ativas no mesmo dia + quadra com sobreposição de horário
     direct =
       Rental
       |> where([r], r.is_recurring == false)
       |> where([r], r.date == ^date)
       |> where([r], r.court == ^court)
       |> where([r], r.status != "cancelled")
-      |> Repo.exists?()
+      |> Repo.all()
+      |> Enum.any?(&time_overlap?(start_time, end_time, &1.start_time, &1.end_time))
 
     if direct do
       true
     else
-      # Conflito com recorrências ativas
+      # Conflito com recorrências ativas no dia/quadra (mesmo dia da semana + horário)
       weekday = date |> Date.day_of_week() |> normalize_weekday()
 
       Rental
@@ -357,15 +398,18 @@ defmodule SysFc.Rentals do
       |> where([r], r.recurrence_start_date <= ^date)
       |> where([r], is_nil(r.recurrence_end_date) or r.recurrence_end_date >= ^date)
       |> Repo.all()
-      |> Enum.any?(fn r -> weekday in (r.recurrence_weekdays || []) end)
+      |> Enum.any?(fn r ->
+        weekday in (r.recurrence_weekdays || []) and
+          time_overlap?(start_time, end_time, r.start_time, r.end_time)
+      end)
     end
   end
 
-  defp has_single_conflict?(_, _), do: false
+  defp has_single_conflict?(_, _, _, _), do: false
 
-  defp has_recurrence_conflict?(court, weekdays, rs, re)
+  defp has_recurrence_conflict?(court, weekdays, rs, re, start_time, end_time)
        when is_list(weekdays) and not is_nil(rs) and not is_nil(re) do
-    # Locações únicas que caem em algum dos weekdays no intervalo
+    # Locações únicas que caem em algum dos weekdays no intervalo, com horário sobreposto
     singles =
       Rental
       |> where([r], r.is_recurring == false)
@@ -377,13 +421,13 @@ defmodule SysFc.Rentals do
     single_clash? =
       Enum.any?(singles, fn r ->
         wd = r.date |> Date.day_of_week() |> normalize_weekday()
-        wd in weekdays
+        wd in weekdays and time_overlap?(start_time, end_time, r.start_time, r.end_time)
       end)
 
     if single_clash? do
       true
     else
-      # Outras recorrências sobrepostas
+      # Outras recorrências sobrepostas (mesmo dia da semana + horário)
       Rental
       |> where([r], r.is_recurring == true)
       |> where([r], r.court == ^court)
@@ -392,12 +436,13 @@ defmodule SysFc.Rentals do
       |> where([r], r.recurrence_start_date <= ^re)
       |> Repo.all()
       |> Enum.any?(fn r ->
-        Enum.any?(r.recurrence_weekdays || [], &(&1 in weekdays))
+        Enum.any?(r.recurrence_weekdays || [], &(&1 in weekdays)) and
+          time_overlap?(start_time, end_time, r.start_time, r.end_time)
       end)
     end
   end
 
-  defp has_recurrence_conflict?(_, _, _, _), do: false
+  defp has_recurrence_conflict?(_, _, _, _, _, _), do: false
 
   # ── Geração de fees iniciais ─────────────────────────────────
 
@@ -475,6 +520,25 @@ defmodule SysFc.Rentals do
     RentalFee
     |> where([f], f.rental_id == ^rental_id)
     |> order_by([f], asc: f.due_date)
+    |> Repo.all()
+  end
+
+  @doc """
+  Lista as cobranças de locação que incidem em um mês/ano (pelo vencimento),
+  excluindo locações canceladas. Para locações recorrentes, cada mês tem sua
+  própria cobrança com o valor mensal — assim o total é diluído por mês, e não
+  somado de uma vez. A locação é pré-carregada para exibir locatário/quadra.
+  """
+  def list_fees_for_month(month, year) do
+    month_start = Date.new!(year, month, 1)
+    month_end = Date.new!(year, month, Date.days_in_month(month_start))
+
+    RentalFee
+    |> join(:inner, [f], r in Rental, on: r.id == f.rental_id)
+    |> where([_f, r], r.status != "cancelled")
+    |> where([f], f.due_date >= ^month_start and f.due_date <= ^month_end)
+    |> order_by([f], asc: f.due_date)
+    |> preload([_f, r], rental: r)
     |> Repo.all()
   end
 

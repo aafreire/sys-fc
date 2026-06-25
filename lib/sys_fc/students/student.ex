@@ -66,7 +66,6 @@ defmodule SysFc.Students.Student do
     |> validate_rg_format()
     |> sanitize_cpf()
     |> validate_cpf_format()
-    |> validate_document_present()
     |> unique_constraint(:enrollment_number)
     |> unique_constraint(:rg, name: :students_rg_unique, message: "já existe um aluno cadastrado com este RG")
     |> unique_constraint(:cpf, name: :students_cpf_unique, message: "já existe um aluno cadastrado com este CPF")
@@ -156,19 +155,4 @@ defmodule SysFc.Students.Student do
     end
   end
 
-  # Para criação: pelo menos um documento (RG ou CPF) deve ser informado
-  defp validate_document_present(changeset) do
-    rg = get_field(changeset, :rg)
-    cpf = get_field(changeset, :cpf)
-
-    if blank?(rg) and blank?(cpf) do
-      add_error(changeset, :rg, "informe RG ou CPF")
-    else
-      changeset
-    end
-  end
-
-  defp blank?(nil), do: true
-  defp blank?(""), do: true
-  defp blank?(_), do: false
 end

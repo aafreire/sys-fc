@@ -28,6 +28,17 @@ defmodule SysFcWeb.RentalJSON do
 
   def rental_fee(%{fee: fee}), do: %{data: fee_data(fee)}
 
+  def monthly(%{fees: fees, month: month, year: year}) do
+    %{
+      data: %{
+        month: month,
+        year: year,
+        summary: summarize_month(fees),
+        fees: Enum.map(fees, &month_fee_data/1)
+      }
+    }
+  end
+
   # ── Helpers ───────────────────────────────────────────────────
 
   defp config_data(config) do
@@ -122,6 +133,56 @@ defmodule SysFcWeb.RentalJSON do
       paid: Decimal.to_string(paid),
       pending: Decimal.to_string(pending),
       overdue: overdue_count
+    }
+  end
+
+  # Resumo mensal com valores (recebido / pendente / atraso / falta receber)
+  defp summarize_month(fees) do
+    today = Date.utc_today()
+
+    {received, pending, overdue} =
+      Enum.reduce(fees, {Decimal.new(0), Decimal.new(0), Decimal.new(0)}, fn f, {r, p, o} ->
+        amount = to_decimal(f.amount)
+
+        cond do
+          to_string(f.status) == "paid" ->
+            {Decimal.add(r, amount), p, o}
+
+          not is_nil(f.due_date) and Date.compare(parse_due(f.due_date), today) == :lt ->
+            {r, p, Decimal.add(o, amount)}
+
+          true ->
+            {r, Decimal.add(p, amount), o}
+        end
+      end)
+
+    to_receive = Decimal.add(pending, overdue)
+
+    %{
+      received: Decimal.to_string(received),
+      pending: Decimal.to_string(pending),
+      overdue: Decimal.to_string(overdue),
+      to_receive: Decimal.to_string(to_receive),
+      total: Decimal.to_string(Decimal.add(received, to_receive))
+    }
+  end
+
+  defp month_fee_data(f) do
+    rental = if Ecto.assoc_loaded?(f.rental), do: f.rental, else: nil
+
+    %{
+      id: f.id,
+      rental_id: f.rental_id,
+      reference_month: f.reference_month,
+      reference_year: f.reference_year,
+      amount: f.amount,
+      due_date: f.due_date,
+      payment_date: f.payment_date,
+      status: f.status,
+      renter_name: rental && rental.renter_name,
+      court: rental && rental.court,
+      is_recurring: rental && rental.is_recurring,
+      pricing_type: rental && rental.pricing_type
     }
   end
 

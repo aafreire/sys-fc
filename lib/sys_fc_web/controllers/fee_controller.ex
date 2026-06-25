@@ -28,6 +28,16 @@ defmodule SysFcWeb.FeeController do
     render(conn, :index, fees: fees)
   end
 
+  # GET /api/admin/financial-overview?month=6&year=2026
+  def overview(conn, params) do
+    today = Date.utc_today()
+    month = parse_int(params["month"]) || today.month
+    year = parse_int(params["year"]) || today.year
+
+    overview = Finance.financial_overview(month, year)
+    render(conn, :overview, overview: overview)
+  end
+
   # PUT /api/admin/fees/batch-mark-paid
   def batch_mark_paid(conn, %{"fee_ids" => fee_ids}) when is_list(fee_ids) do
     fees = Enum.map(fee_ids, &Finance.get_fee/1)

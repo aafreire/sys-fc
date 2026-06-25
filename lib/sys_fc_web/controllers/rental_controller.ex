@@ -62,6 +62,16 @@ defmodule SysFcWeb.RentalController do
     conn |> put_status(:ok) |> render(:admin_index, rentals: rentals)
   end
 
+  # GET /api/admin/rentals/monthly?month=7&year=2025
+  def monthly(conn, params) do
+    today = Date.utc_today()
+    month = parse_int(params["month"], today.month)
+    year = parse_int(params["year"], today.year)
+
+    fees = Rentals.list_fees_for_month(month, year)
+    conn |> put_status(:ok) |> render(:monthly, fees: fees, month: month, year: year)
+  end
+
   # GET /api/admin/rentals/:id
   def admin_show(conn, %{"id" => id}) do
     case Rentals.get_rental(id) do

@@ -56,6 +56,7 @@ defmodule SysFcWeb.Router do
     # Alunos
     get    "/students",                    StudentController, :index
     get    "/students/pending",            StudentController, :pending
+    get    "/students/check-document",     StudentController, :check_document
     post   "/students",                    StudentController, :create
     get    "/students/:id",                StudentController, :show
     put    "/students/:id",                StudentController, :update
@@ -105,6 +106,7 @@ defmodule SysFcWeb.Router do
     post   "/rental-unavailable",         RentalController, :create_unavailable
     delete "/rental-unavailable/:id",     RentalController, :delete_unavailable
     get    "/rentals",                    RentalController, :admin_index
+    get    "/rentals/monthly",            RentalController, :monthly
     post   "/rentals",                    RentalController, :admin_create
     get    "/rentals/:id",                RentalController, :admin_show
     put    "/rentals/:id/status",         RentalController, :admin_update_status
@@ -151,12 +153,21 @@ defmodule SysFcWeb.Router do
     pipe_through [:api, :authenticated, :admin]
 
     # Financeiro global (ambos os roles podem ver e marcar como pago)
+    get  "/financial-overview",      FeeController, :overview
     get  "/fees",                    FeeController, :index
     get  "/fees/home",               FeeController, :home_fees
     put  "/fees/batch-mark-paid",    FeeController, :batch_mark_paid
     get  "/fees/:id",                FeeController, :show
     put  "/fees/:id/mark-paid",      FeeController, :mark_paid
     put  "/fees/:id/mark-unpaid",    FeeController, :mark_unpaid
+
+    # Despesas da escolinha
+    get    "/expenses",                 ExpenseController, :index
+    post   "/expenses",                 ExpenseController, :create
+    put    "/expenses/:id",             ExpenseController, :update
+    delete "/expenses/:id",             ExpenseController, :delete
+    put    "/expenses/:id/mark-paid",   ExpenseController, :mark_paid
+    put    "/expenses/:id/mark-unpaid", ExpenseController, :mark_unpaid
   end
 
   # ── Rotas exclusivas admin_master ─────────────────────────
@@ -179,6 +190,7 @@ defmodule SysFcWeb.Router do
     pipe_through [:api, :authenticated, :guardian]
 
     get  "/students",                 GuardianController, :my_students
+    get  "/students/check-document",  StudentController, :check_document
     post "/students",                 StudentController, :guardian_create
     put  "/students/:id",               StudentController, :guardian_update
     put  "/students/:id/toggle-freeze", StudentController, :guardian_freeze

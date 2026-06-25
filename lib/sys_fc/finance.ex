@@ -75,6 +75,113 @@ defmodule SysFc.Finance do
 
   def get_fee(id), do: Repo.get(Fee, id) |> Repo.preload(:student)
 
+  @doc "Mensalidades de alunos de um mês/ano específico (todos os status)."
+  def list_fees_for_month(month, year) do
+    Fee
+    |> where([f], f.reference_month == ^month and f.reference_year == ^year)
+    |> Repo.all()
+  end
+
+  @doc """
+  Visão geral financeira consolidada de um mês: alunos, locações e despesas.
+
+  Para alunos e locações calcula, por mês:
+    * received   — já recebido (pago)
+    * pending    — pendente (ainda não vencido)
+    * overdue    — em atraso (não pago e vencido)
+    * to_receive — falta receber (pending + overdue)
+    * total      — received + to_receive
+
+  Faturamento final (net_revenue) = recebido de alunos + recebido de locações
+  − despesas PAGAS do mês. Valores apenas pendentes/em atraso NÃO entram no
+  faturamento (ainda não entraram no caixa, mas também não são custos), e
+  despesas não pagas também não são descontadas.
+  """
+  def financial_overview(month, year) do
+    today = Date.utc_today()
+
+    student_fees = list_fees_for_month(month, year)
+    rental_fees = SysFc.Rentals.list_fees_for_month(month, year)
+    expenses = SysFc.Expenses.list_expenses(month, year)
+
+    students = summarize_receivables(student_fees, today)
+    rentals = summarize_receivables(rental_fees, today)
+    expenses_summary = summarize_expenses(expenses)
+
+    total_received = Decimal.add(students.received, rentals.received)
+    total_to_receive = Decimal.add(students.to_receive, rentals.to_receive)
+    total_overdue = Decimal.add(students.overdue, rentals.overdue)
+    # Faturamento final desconta apenas as despesas efetivamente pagas
+    net_revenue = Decimal.sub(total_received, expenses_summary.paid)
+
+    %{
+      month: month,
+      year: year,
+      students: students,
+      rentals: rentals,
+      expenses: expenses_summary,
+      totals: %{
+        total_received: total_received,
+        total_to_receive: total_to_receive,
+        total_overdue: total_overdue,
+        total_expenses: expenses_summary.total,
+        net_revenue: net_revenue
+      }
+    }
+  end
+
+  defp summarize_receivables(items, today) do
+    {received, pending, overdue} =
+      Enum.reduce(items, {Decimal.new(0), Decimal.new(0), Decimal.new(0)}, fn it, {r, p, o} ->
+        amount = to_decimal(it.amount)
+
+        cond do
+          to_string(it.status) == "paid" ->
+            {Decimal.add(r, amount), p, o}
+
+          not is_nil(it.due_date) and Date.compare(it.due_date, today) == :lt ->
+            {r, p, Decimal.add(o, amount)}
+
+          true ->
+            {r, Decimal.add(p, amount), o}
+        end
+      end)
+
+    to_receive = Decimal.add(pending, overdue)
+
+    %{
+      received: received,
+      pending: pending,
+      overdue: overdue,
+      to_receive: to_receive,
+      total: Decimal.add(received, to_receive)
+    }
+  end
+
+  defp summarize_expenses(expenses) do
+    Enum.reduce(expenses, %{total: Decimal.new(0), paid: Decimal.new(0), unpaid: Decimal.new(0)}, fn e, acc ->
+      amount = to_decimal(e.amount)
+      acc = %{acc | total: Decimal.add(acc.total, amount)}
+
+      if to_string(e.status) == "paid" do
+        %{acc | paid: Decimal.add(acc.paid, amount)}
+      else
+        %{acc | unpaid: Decimal.add(acc.unpaid, amount)}
+      end
+    end)
+  end
+
+  defp to_decimal(nil), do: Decimal.new(0)
+  defp to_decimal(%Decimal{} = d), do: d
+  defp to_decimal(v) when is_integer(v), do: Decimal.new(v)
+  defp to_decimal(v) when is_float(v), do: Decimal.from_float(v)
+  defp to_decimal(v) when is_binary(v) do
+    case Decimal.parse(v) do
+      {d, _} -> d
+      _ -> Decimal.new(0)
+    end
+  end
+
   # ── Atualização ───────────────────────────────────────────
 
   def mark_as_paid(%Fee{} = fee, payment_date \\ nil) do

@@ -19,6 +19,14 @@ defmodule SysFcWeb.StudentController do
     render(conn, :index, students: students, meta: meta)
   end
 
+  # GET /api/admin/students/check-document?type=cpf|rg&value=...
+  def check_document(conn, params) do
+    type = params["type"]
+    value = params["value"] || params["document"]
+    exists = Students.document_exists?(type, value)
+    conn |> put_status(:ok) |> json(%{exists: exists})
+  end
+
   # GET /api/admin/students/:id
   def show(conn, %{"id" => id}) do
     case Students.get_student(id) do

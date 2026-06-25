@@ -64,10 +64,18 @@ defmodule SysFc.Rentals.Rental do
     |> validate_number(:amount, greater_than: 0, message: "deve ser maior que zero")
     |> validate_hours()
     |> foreign_key_constraint(:guardian_id)
-    |> unique_constraint([:date, :court],
-        name: :rentals_date_court_active,
-        message: "Esta quadra já está reservada nesta data"
-      )
+  end
+
+  @doc """
+  Changeset mínimo para alterar apenas o status da locação (ex.: cancelar).
+  Não exige os demais campos, permitindo cancelar locações criadas pelo
+  admin (sem guardian_id/payment_method).
+  """
+  def status_changeset(rental, attrs) do
+    rental
+    |> cast(attrs, [:status])
+    |> validate_required([:status])
+    |> validate_inclusion(:status, @statuses)
   end
 
   @doc """
@@ -99,10 +107,6 @@ defmodule SysFc.Rentals.Rental do
     |> validate_single()
     |> validate_renter_document()
     |> foreign_key_constraint(:guardian_id)
-    |> unique_constraint([:date, :court],
-        name: :rentals_date_court_active,
-        message: "Esta quadra já está reservada nesta data"
-      )
   end
 
   defp validate_renter_document(changeset) do
