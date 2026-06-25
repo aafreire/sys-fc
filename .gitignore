@@ -30,3 +30,9 @@ sys_fc-*.tar
 .env.prod
 .env.local
 
+# Database dumps (podem conter dados de produção)
+*.dump
+
+# Local Docker overrides (específico de cada máquina)
+docker-compose.override.yml
+
